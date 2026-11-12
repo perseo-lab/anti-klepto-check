@@ -12,6 +12,7 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 from nonceverify.hw import HEIGHT, WIDTH, Event
+from nonceverify.i18n import Translated, t
 
 APP_NAME = "ANTI-KLEPTO CHECK"
 
@@ -117,43 +118,61 @@ def font(size: int, bold: bool = False, mono: bool = False, icons: bool = False)
 
 
 def text_width(text: str, f) -> int:
+    """ Width of `text` as it will be drawn: translated (v7.10) """
+    return int(f.getlength(t(text)))
+
+
+def _raw_width(text: str, f) -> int:
+    """ Width of text already translated (wrapping measures many pieces of it) """
     return int(f.getlength(text))
 
 
-def fit_font(text: str, size: int, width: int, bold: bool = False, mono: bool = False):
-    """ The font at `size`, or smaller (down to 11) until `text` fits in `width` """
-    while size > 11 and text_width(text, font(size, bold=bold, mono=mono)) > width:
+def fit_font(text: str, size: int, width: int, bold: bool = False, mono: bool = False, smallest: int = 11):
+    """ The font at `size`, or smaller (down to `smallest`) until `text` fits in `width` """
+    while size > smallest and text_width(text, font(size, bold=bold, mono=mono)) > width:
         size -= 1
     return font(size, bold=bold, mono=mono)
 
 
 def wrap(text: str, f, width: int) -> list:
+    """ `text` translated (v7.10), then broken into lines of at most `width` pixels """
+    text = t(text)
     lines = []
     for paragraph_text in text.split("\n"):
         words = paragraph_text.split(" ")
         line = ""
         for word in words:
             candidate = word if not line else line + " " + word
-            if text_width(candidate, f) <= width:
+            if _raw_width(candidate, f) <= width:
                 line = candidate
             else:
                 if line:
                     lines.append(line)
-                while text_width(word, f) > width:
+                while _raw_width(word, f) > width:
                     # break very long tokens (addresses, hex)
                     cut = len(word)
-                    while cut > 1 and text_width(word[:cut], f) > width:
+                    while cut > 1 and _raw_width(word[:cut], f) > width:
                         cut -= 1
                     lines.append(word[:cut])
                     word = word[cut:]
                 line = word
         lines.append(line)
-    return lines
+    return [Translated(line) for line in lines]
+
+
+class Draw(ImageDraw.ImageDraw):
+    """ v7.10: ImageDraw whose text() draws the translation (ui.t) """
+    def text(self, xy, text, *args, **kwargs):
+        return super().text(xy, t(text), *args, **kwargs)
+
+
+def draw_on(image) -> Draw:
+    return Draw(image)
 
 
 def new_canvas():
     image = Image.new("RGB", (WIDTH, HEIGHT), BACKGROUND)
-    return image, ImageDraw.Draw(image)
+    return image, Draw(image)
 
 
 def icon(d, name: str, xy, size: int = 20, color=TEXT, anchor: str = "mm"):
@@ -162,17 +181,23 @@ def icon(d, name: str, xy, size: int = 20, color=TEXT, anchor: str = "mm"):
     d.text(xy, ICONS.get(name, name), fill=color, font=font(size, icons=True), anchor=anchor)
 
 
+def _spaced_width(text: str, f, spacing: int) -> int:
+    text = t(text)
+    return int(sum(_raw_width(c, f) for c in text) + spacing * (len(text) - 1))
+
+
 def spaced(d, xy, text: str, f, fill, spacing: int = 2, anchor: str = "mm"):
     """ Letter-spaced text (labels, the app name) """
-    total = sum(text_width(c, f) for c in text) + spacing * (len(text) - 1)
+    text = Translated(t(text))
+    total = sum(_raw_width(c, f) for c in text) + spacing * (len(text) - 1)
     x, y = xy
     if anchor[0] == "m":
         x -= total / 2
     elif anchor[0] == "r":
         x -= total
     for c in text:
-        d.text((x, y), c, fill=fill, font=f, anchor="l" + anchor[1])
-        x += text_width(c, f) + spacing
+        ImageDraw.ImageDraw.text(d, (x, y), c, fill=fill, font=f, anchor="l" + anchor[1])
+        x += _raw_width(c, f) + spacing
 
 
 def emblem(d, cx: int, cy: int, size: int = 96):
@@ -210,10 +235,17 @@ def header(d, step: int = None, label: str = None, help: bool = False):
         right = WIDTH - PAD                # a bad reading never breaks a screen
     if step is not None:
         x = right
-        f = font(13, bold=True, mono=True)
+        # v7.10: the step names (translated) shrink to the room between the app name, or the
+        # "?" button, and the battery: "SEMILLA PSBT RESULTADO" is longer than "SEED PSBT RESULT"
+        left = HELP_RECT[2] + 4 if help else 32 + _spaced_width(APP_NAME, font(14, bold=True, mono=True), 1) + 8
+        size = 13
+        while size > 9 and sum(text_width(n, font(size, bold=True, mono=True)) + 16 for n in STEPS) - 4 > right - left:
+            size -= 1
+        f = font(size, bold=True, mono=True)
+        pad = 12 if size == 13 else 8
         for i in range(len(STEPS) - 1, -1, -1):
             name = STEPS[i]
-            w = text_width(name, f) + 12
+            w = text_width(name, f) + pad
             active = (i == step)
             done = (i < step)
             if active:
@@ -251,16 +283,18 @@ class Button:
         outline = None if filled else LINE
         d.rounded_rectangle(self.rect, radius=5, fill=fill, outline=outline, width=1)
         fg = BACKGROUND if filled and not pressed else TEXT
-        f = font(self.size, bold=True)
+        label = t(self.label)              # v7.10: translated, and shrunk if it doesn't fit
+        room = self.rect[2] - self.rect[0] - 12 - ((self.size + 8) if self.icon_name else 0)
+        f = fit_font(label, self.size, room, bold=True)
         cx = (self.rect[0] + self.rect[2]) / 2
         cy = (self.rect[1] + self.rect[3]) / 2
         if self.icon_name:
             isz = self.size
-            w = isz + 8 + text_width(self.label, f)
+            w = isz + 8 + _raw_width(label, f)
             icon(d, self.icon_name, (cx - w / 2 + isz / 2, cy), isz, fg)
-            d.text((cx - w / 2 + isz + 8, cy), self.label, fill=fg, font=f, anchor="lm")
+            d.text((cx - w / 2 + isz + 8, cy), label, fill=fg, font=f, anchor="lm")
         else:
-            d.text((cx, cy), self.label, fill=fg, font=f, anchor="mm")
+            d.text((cx, cy), label, fill=fg, font=f, anchor="mm")
 
 
 def button_row(labels, y: int, height: int = BUTTON_H, primary_index=None, values=None, icons=None):
@@ -282,7 +316,7 @@ def bottom_row(labels, primary_index=None, values=None, icons=None):
 
 
 def title(d, text: str, color=TEXT, y: int = TOP + 14):
-    d.text((PAD, y), text, fill=color, font=font(22, bold=True), anchor="lm")
+    d.text((PAD, y), text, fill=color, font=fit_font(text, 22, WIDTH - 2 * PAD, bold=True), anchor="lm")
 
 
 def paragraph(d, text: str, y: int, size: int = 18, color=TEXT, width: int = WIDTH - 2 * PAD,
@@ -460,10 +494,11 @@ class KeyboardScreen(Screen):
     def field_lines(self) -> list:
         """ The passphrase (spaces as ·) and the cursor on at most two lines """
         n = self.per_line()
-        shown = self.text.replace(" ", "·") + "_"
+        shown = Translated(self.text.replace(" ", "·") + "_")      # v7.10: typed text, never translated
         if len(shown) > 2 * n:
             shown = "…" + shown[-(2 * n - 1):]
-        return [shown[:n], shown[n:]] if len(shown) > n else [shown]
+        lines = [shown[:n], shown[n:]] if len(shown) > n else [shown]
+        return [Translated(line) for line in lines]
 
     def on_event(self, event):
         if event.kind != Event.TAP:

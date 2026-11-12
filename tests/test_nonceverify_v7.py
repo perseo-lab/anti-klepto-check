@@ -307,14 +307,17 @@ def test_screens_redraw_when_the_battery_changes():
     assert len(hw.shown) == 2, "drawn once, redrawn once when the battery changed"
 
 
+TRANSLATION_CATALOGS = {"i18n_it.py", "i18n_fr.py", "i18n_es.py", "i18n_de.py"}
+
+
 def test_splash_and_texts_are_english():
     assert "non firma" not in inspect.getsource(app)
     italian = re.compile(r"\b(non(?!-)|della|delle|questo|questa|firma|firmatario|parole|tocca|scegli|trasmettere|"
                          r"esito|annulla|conferma|indietro|cancella|spegni|errore|verifica)\b|[àèéìòù]", re.I)
     src = os.path.join(os.path.dirname(app.__file__))
     for name in sorted(os.listdir(src)):
-        if not name.endswith(".py"):
-            continue
+        if not name.endswith(".py") or name in TRANSLATION_CATALOGS:
+            continue                                  # v7.10: the catalogs are meant to be translated
         code = open(os.path.join(src, name), encoding="utf-8").read()
         for tok in tokenize.generate_tokens(io.StringIO(code).readline):
             if tok.type == tokenize.STRING and italian.search(tok.string):

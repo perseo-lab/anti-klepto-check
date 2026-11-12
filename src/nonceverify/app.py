@@ -15,7 +15,7 @@ import logging
 import random
 import time
 
-from nonceverify import address, crypto, seedqr, storage, transport, ui, wordentry
+from nonceverify import address, crypto, i18n, seedqr, storage, transport, ui, wordentry
 from nonceverify.hw import HEIGHT, WIDTH, Event, QRDecoderError, decode_qr
 from nonceverify.psbt import PSBTError, combine_final_tx, has_signatures, parse_psbt, parse_tx
 from nonceverify.verify import (OWNER__EXTERNAL, OWNER__FAKE, OWNER__OURS, OWNER__UNVERIFIED,
@@ -57,7 +57,7 @@ def show_spaces(text: str) -> str:
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.9"
+VERSION = "7.10"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -105,10 +105,10 @@ def splash_background():
     panel with the four checks. Plain PIL drawing, no blur: a few hundred lines and four
     alpha composites, drawn once per boot and kept.
     """
-    from PIL import Image, ImageDraw
+    from PIL import Image
     hz = SplashScreen.HORIZON
     image = Image.new("RGBA", (WIDTH, HEIGHT))
-    d = ImageDraw.Draw(image)
+    d = ui.draw_on(image)
     sky_top, sky_bottom, floor_bottom = ui.BACKGROUND, (16, 26, 40), (8, 34, 38)
     for y in range(HEIGHT):
         color = _blend(sky_top, sky_bottom, y / hz) if y < hz else \
@@ -116,7 +116,7 @@ def splash_background():
         d.line((0, y, WIDTH, y), fill=color + (255,))
 
     lines = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    g = ImageDraw.Draw(lines)
+    g = ui.draw_on(lines)
     for x in range(0, WIDTH, 24):                                   # flat grid in the sky
         g.line((x, 0, x, hz), fill=(60, 84, 112, 70))
     for y in range(0, hz, 24):
@@ -134,19 +134,19 @@ def splash_background():
     image.alpha_composite(lines)
 
     halo = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    h = ImageDraw.Draw(halo)
+    h = ui.draw_on(halo)
     cx, cy = WIDTH // 2, SplashScreen.EMBLEM_CY
     for r, alpha in ((60, 10), (50, 16), (42, 24), (34, 34)):
         h.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ui.ACCENT + (alpha,))
     image.alpha_composite(halo)
-    d = ImageDraw.Draw(image)
+    d = ui.draw_on(image)
     ui.emblem(d, cx, cy, SplashScreen.EMBLEM_SIZE)
     ui.spaced(d, (WIDTH / 2, 101), "ANTI-KLEPTO", ui.font(32, bold=True), ui.TEXT, 2)
     ui.spaced(d, (WIDTH / 2, 127), "CHECK", ui.font(15, bold=True, mono=True), ui.ACCENT, 9)
 
     x1, y1, x2, y2 = SplashScreen.PANEL
     glass = Image.new("RGBA", image.size, (0, 0, 0, 0))
-    p = ImageDraw.Draw(glass)
+    p = ui.draw_on(glass)
     p.rounded_rectangle((x1 + 3, y1 + 4, x2 + 3, y2 + 4), radius=10, fill=(0, 0, 0, 120))
     p.rounded_rectangle((x1, y1, x2, y2), radius=10, fill=ui.PANEL + (232,), outline=(70, 96, 124, 200), width=1)
     p.line((x1 + 10, y1 + 1, x2 - 10, y1 + 1), fill=(120, 150, 180, 110))
@@ -156,16 +156,17 @@ def splash_background():
         y = y1 + (y2 - y1) * r / rows
         p.line((x1 + 12, y, x2 - 12, y), fill=ui.LINE + (255,))
     image.alpha_composite(glass)
-    d = ImageDraw.Draw(image)
-    f_name, f_sub = ui.font(13, bold=True), ui.font(10)
+    d = ui.draw_on(image)
     rows = (len(SPLASH_FEATURES) + 1) // 2
     row_h = (y2 - y1) / rows
     for i, (name, sub) in enumerate(SPLASH_FEATURES):
         fx = x1 + 12 + (i % 2) * (WIDTH / 2 - x1)
         fy = y1 + row_h / 2 + (i // 2) * row_h
         check_mark(d, fx + 7, fy, 6)
-        d.text((fx + 19, fy - 5), name, fill=ui.TEXT, font=f_name, anchor="lm")
-        d.text((fx + 19, fy + 8), sub, fill=ui.DIM, font=f_sub, anchor="lm")
+        room = int(WIDTH / 2 - x1 - 19 - 8)              # v7.10: translations shrink to the cell
+        d.text((fx + 19, fy - 5), name, fill=ui.TEXT, font=ui.fit_font(name, 13, room, bold=True, smallest=9),
+               anchor="lm")
+        d.text((fx + 19, fy + 8), sub, fill=ui.DIM, font=ui.fit_font(sub, 10, room, smallest=8), anchor="lm")
     d.text((WIDTH / 2, 303), f"SeedSigner Max · verifier SD v{VERSION}", fill=ui.DIM,
            font=ui.font(13, mono=True), anchor="mm")
     return image.convert("RGB")
@@ -187,23 +188,58 @@ class SplashScreen(ui.Screen):
     EMBLEM_SIZE = 76
     PANEL = (40, 138, 440, 232)       # v7.6: three rows (six checks)
     START = (140, 240, 340, 276)
-    _background = None
+    # v7.10 (Ollen): host top left, language top right, either side of the emblem. In RAM
+    # only (i18n): never written to the microSD, English and Sparrow again at power-on.
+    CHIP_TOP, CHIP_BOTTOM = 4, 36
+    HOST_LEFT, HOST_W = 6, 76
+    LANG_RIGHT, LANG_W = WIDTH - 6, 34
+    CHIP_GAP = 4
+    _backgrounds = {}
     sd_status = None                  # v7.5: storage.protect_microsd() result, set by main()
 
     def __init__(self):
         super().__init__()
         self.buttons = [ui.Button(self.START, "START", value="go", primary=True)]
+        self.buttons += self.chips()
+
+    def chips(self):
+        out = []
+        for i, (code, name) in enumerate(i18n.HOSTS):
+            x1 = self.HOST_LEFT + i * (self.HOST_W + self.CHIP_GAP)
+            out.append(ui.Button((x1, self.CHIP_TOP, x1 + self.HOST_W, self.CHIP_BOTTOM), i18n.Translated(name),
+                                 value=("host", code),
+                                 size=15, primary=(code == i18n.host())))
+        n = len(i18n.LANGUAGES)
+        left = self.LANG_RIGHT - n * self.LANG_W - (n - 1) * self.CHIP_GAP
+        for i, (code, name) in enumerate(i18n.LANGUAGES):
+            x1 = left + i * (self.LANG_W + self.CHIP_GAP)
+            out.append(ui.Button((x1, self.CHIP_TOP, x1 + self.LANG_W, self.CHIP_BOTTOM), name, value=("lang", code),
+                                 size=14, primary=(code == i18n.language())))
+        return out
+
+    def on_event(self, event):
+        if event.kind != Event.TAP:
+            return None
+        for b in self.buttons[1:]:
+            if b.contains(event.x, event.y, margin=1):
+                kind, code = b.value
+                (i18n.set_language if kind == "lang" else i18n.set_host)(code)
+                self.buttons = self.buttons[:1] + self.chips()
+                return "__redraw__"
+        return super().on_event(event)
 
     @classmethod
     def background(cls):
-        if cls._background is None:
-            cls._background = splash_background()
-        return cls._background
+        lang = i18n.language()
+        if lang not in cls._backgrounds:
+            cls._backgrounds[lang] = splash_background()
+        return cls._backgrounds[lang]
 
     def render(self):
-        from PIL import ImageDraw
         image = self.background().copy()
-        d = ImageDraw.Draw(image)
+        d = ui.draw_on(image)
+        for chip in self.buttons[1:]:
+            chip.draw(d)
         x1, y1, x2, y2 = self.START
         cy, radius = (y1 + y2) / 2, (y2 - y1) // 2
         d.rounded_rectangle((x1 - 3, y1 - 3, x2 + 3, y2 + 3), radius=radius + 3, outline=ui.ACCENT_DARK, width=3)
@@ -300,7 +336,8 @@ class ConfirmPassphraseScreen(ui.Screen):
                fill=ui.DIM, font=ui.font(12, mono=True), anchor="rt")
         f = ui.font(19, mono=True)
         shown = show_spaces(self.passphrase) if self.revealed else "•" * min(len(self.passphrase), 40)
-        lines = ui.wrap(shown if self.passphrase else "(empty)", f, WIDTH - 5 * ui.PAD)
+        # v7.10: the passphrase is never translated (i18n.Translated), "(empty)" is
+        lines = ui.wrap(i18n.Translated(shown) if self.passphrase else "(empty)", f, WIDTH - 5 * ui.PAD)
         if len(lines) > 3:
             lines = lines[:2] + ["… " + lines[-1][-30:]]
         for i, line in enumerate(lines):
@@ -372,7 +409,9 @@ class SeedReadyScreen(ui.Screen):
         d.text((WIDTH - ui.PAD - 12, ui.TOP + 80), f"{self.words} words · " +
                ("with passphrase" if self.has_passphrase else "no passphrase"),
                fill=ui.DIM, font=ui.font(14), anchor="rm")
-        ui.paragraph(d, "It must match the XFP on your wallet backup.", ui.TOP + 104, size=17, color=ui.TEXT)
+        match = "It must match the XFP on your wallet backup."       # v7.10: one line in every language
+        ui.paragraph(d, match, ui.TOP + 104, size=ui.fit_font(match, 17, WIDTH - 2 * ui.PAD, smallest=12).size,
+                     color=ui.TEXT, max_lines=1)
         if self.locked_hint:
             d.text((ui.PAD, self.GRINDING_Y - 8), "Locked for this session: to change it, Change seed",
                    fill=ui.YELLOW, font=ui.font(13), anchor="ls")
@@ -425,9 +464,11 @@ class ScanScreen:
             d.line((x, y, x, y + dy * k), fill=ui.ACCENT, width=3)
         ui.emblem(d, self.LEFT // 2, 34, 36)
         # v7.9: a word never split ("SeedSign / er"): the font shrinks to fit the longest one
-        longest = max(self.heading.split(), key=lambda w: ui.text_width(w, ui.font(15, bold=True)), default="")
-        f_head = ui.fit_font(longest, 15, self.LEFT - 8, bold=True)
-        for i, line in enumerate(ui.wrap(self.heading, f_head, self.LEFT - 8)[:3]):
+        heading = i18n.t(self.heading)                    # v7.10: the words of the translated heading
+        longest = max(heading.split(), key=lambda w: ui.text_width(i18n.Translated(w), ui.font(15, bold=True)),
+                      default="")
+        f_head = ui.fit_font(i18n.Translated(longest), 15, self.LEFT - 8, bold=True)
+        for i, line in enumerate(ui.wrap(i18n.Translated(heading), f_head, self.LEFT - 8)[:3]):
             d.text((self.LEFT / 2, 76 + i * 19), line, fill=ui.ACCENT, font=f_head, anchor="mm")
         self.back.draw(d)
         self.zoom.draw(d)
@@ -786,8 +827,10 @@ class ResultScreen(ui.Screen):
             notes = "; ".join(x.note for x in ours if x.note)
             if notes:
                 # the reason takes both lines (the path is in Details); cut with … only if longer
-                wrapped = ui.wrap(f"{first[0].split(' · ')[0]}: {notes}" if len(ours) == 1 else notes,
-                                  ui.font(16), width)
+                # v7.10: label and notes translated one by one ("change #3", each "; " note)
+                reason = i18n.Translated(f"{i18n.t(first[0].split(' · ')[0])}: {i18n.t(notes)}" if len(ours) == 1
+                                         else i18n.t(notes))
+                wrapped = ui.wrap(reason, ui.font(16), width)
                 if len(wrapped) > 2:
                     wrapped = wrapped[:1] + [wrapped[1][:-2] + "…"]
                 lines = [(ln, ui.YELLOW, False) for ln in wrapped]
@@ -805,14 +848,19 @@ class ResultScreen(ui.Screen):
         x1, y1, x2, y2 = rect
         d.rounded_rectangle(rect, radius=6, fill=ui.PANEL, outline=outline, width=2 if outline != ui.LINE else 1)
         cy = y1 + 15
-        d.text((x1 + 10, cy), label, fill=label_color, font=ui.font(15, bold=True), anchor="lm")
+        f_unit = ui.font(13, bold=True)
+        unit_w = ui.text_width("BTC", f_unit)
+        # v7.10: label (and YOURS) shrink to the room the amount leaves
+        room = x2 - x1 - 20 - ((unit_w + 6 + ui.text_width(btc_amount(sats), ui.font(24, bold=True, mono=True)) + 10)
+                               if sats is not None else 0)
+        both = i18n.Translated(i18n.t(label) + " xxxx " + i18n.t("YOURS")) if yours else label
+        f_label = ui.fit_font(both, 15, room, bold=True, smallest=10)
+        d.text((x1 + 10, cy), label, fill=label_color, font=f_label, anchor="lm")
         if yours:
-            x = x1 + 10 + ui.text_width(label, ui.font(15, bold=True)) + 16
+            x = x1 + 10 + ui.text_width(label, f_label) + 16
             check_mark(d, x, cy, 7, ui.GREEN)
-            d.text((x + 11, cy), "YOURS", fill=ui.GREEN, font=ui.font(15, bold=True), anchor="lm")
+            d.text((x + 11, cy), "YOURS", fill=ui.GREEN, font=f_label, anchor="lm")
         if sats is not None:
-            f_unit = ui.font(13, bold=True)
-            unit_w = ui.text_width("BTC", f_unit)
             d.text((x2 - 10, cy + 3), "BTC", fill=ui.DIM, font=f_unit, anchor="rm")
             d.text((x2 - 16 - unit_w, cy), btc_amount(sats), fill=ui.TEXT, font=ui.font(24, bold=True, mono=True),
                    anchor="rm")
@@ -829,11 +877,12 @@ class ResultScreen(ui.Screen):
         top, h = ui.HEADER_H, self.SUMMARY_BANNER_H
         d.rectangle((0, top, WIDTH, top + h), fill=color)
         ui.icon(d, icon_name, (ui.PAD + 14, top + h / 2), 26, ui.BACKGROUND)
-        d.text((ui.PAD + 34, top + h / 2), headline, fill=ui.BACKGROUND, font=ui.font(22, bold=True), anchor="lm")
-        head_w = ui.text_width(headline, ui.font(22, bold=True))
+        f_head = ui.fit_font(headline, 22, int((WIDTH - 2 * ui.PAD - 34) * 0.62), bold=True, smallest=13)
+        d.text((ui.PAD + 34, top + h / 2), headline, fill=ui.BACKGROUND, font=f_head, anchor="lm")
+        head_w = ui.text_width(headline, f_head)
         room = WIDTH - 2 * ui.PAD - 34 - head_w - 12
         d.text((WIDTH - ui.PAD, top + h / 2 + 1), subline, fill=ui.BACKGROUND,
-               font=ui.fit_font(subline, 14, room, bold=True), anchor="rm")
+               font=ui.fit_font(subline, 14, room, bold=True, smallest=9), anchor="rm")
         sends, change = self.card_texts()
         self.draw_card(d, self.SENDS_CARD, sends)
         self.draw_card(d, self.CHANGE_CARD, change, yours=change[0] == "CHANGE" and change[2] is not None)
@@ -842,8 +891,8 @@ class ResultScreen(ui.Screen):
                anchor="rm")
         note, note_color = self.summary_note()
         if note:
-            d.text((WIDTH / 2, self.NOTE_Y), note, fill=note_color, font=ui.fit_font(note, 14, WIDTH - 2 * ui.PAD),
-                   anchor="mm")
+            d.text((WIDTH / 2, self.NOTE_Y), note, fill=note_color,
+                   font=ui.fit_font(note, 14, WIDTH - 2 * ui.PAD, smallest=9), anchor="mm")
 
     def draw(self, d, image):
         if self.summary:
@@ -854,7 +903,8 @@ class ResultScreen(ui.Screen):
         d.rectangle((0, top, WIDTH, top + self.BANNER_H), fill=color)
         d.ellipse((ui.PAD + 2, top + 9, ui.PAD + 46, top + 53), fill=ui.BACKGROUND)
         ui.icon(d, icon_name, (ui.PAD + 24, top + 31), 44, color)
-        d.text((ui.PAD + 60, top + 22), headline, fill=ui.BACKGROUND, font=ui.font(26, bold=True), anchor="lm")
+        d.text((ui.PAD + 60, top + 22), headline, fill=ui.BACKGROUND,
+               font=ui.fit_font(headline, 26, WIDTH - ui.PAD - 70, bold=True, smallest=14), anchor="lm")
         d.text((ui.PAD + 60, top + 48), subline, fill=ui.BACKGROUND, font=ui.fit_font(subline, 15, WIDTH - ui.PAD - 70),
                anchor="lm")
         self.list.draw(d)
@@ -953,11 +1003,12 @@ class DescriptorScreen(ui.Screen):
             fp = key.origin_fingerprint.hex() if key.origin_fingerprint else "--------"
             steps = check.ours[i] if ours else key.origin_path
             path = crypto.format_path(steps) if steps else "(no origin)"
-            add(f"#{i + 1} {fp}  {path}" + ("   ← THIS SEED" if ours else ""), ui.GREEN if ours else ui.TEXT, 16, True)
+            add(i18n.Translated(f"#{i + 1} {fp}  {path}" + ("   ← " + i18n.t("THIS SEED") if ours else "")),
+                ui.GREEN if ours else ui.TEXT, 16, True)
             # the whole xpub and what follows it: everything that decides the addresses
             for chunk in ui.wrap(address.grouped(key.xpub_text), ui.font(15, mono=True), WIDTH - 5 * ui.PAD):
                 add(f"   {chunk}", ui.TEXT, 15, True)
-            add(f"   then {key.suffix()}", ui.TEXT, 15, True)
+            add(i18n.Translated(f"   {i18n.t('then')} {key.suffix()}"), ui.TEXT, 15, True)
         # v7.5 (independent review): start and end of an xpub can be forged with look-alike
         # keys, and the BIP380 checksum too: it detects damage, not tampering
         if desc.source == "text" and desc.checksum:
@@ -1134,8 +1185,8 @@ class AddressResultScreen(ui.Screen):
             add(crypto.format_path(match.path) if match.account is not None else "…/" + address.format_steps(match.path),
                 ui.DIM, 15, True)
             if match.account is not None and (match.account or match.path[0] != (84 | address.H) or addr.network != "main"):
-                for line in ui.wrap(f"{match.label}, account {match.account}" + (" (testnet)" if addr.network != "main" else "")
-                                    + ": make sure your wallet in Sparrow uses this type and account",
+                for line in ui.wrap(i18n.t("{0}, account {1}{2}: make sure your wallet in Sparrow uses this type and account")
+                                    .format(match.label, match.account, " (testnet)" if addr.network != "main" else ""),
                                     ui.font(15), WIDTH - 3 * ui.PAD):
                     add(line, ui.YELLOW, 15)
                 self.unusual = bool(match.account) or addr.network != "main"
@@ -1167,7 +1218,8 @@ class AddressResultScreen(ui.Screen):
         d.rectangle((0, top, WIDTH, top + self.BANNER_H), fill=color)
         d.ellipse((ui.PAD + 2, top + 9, ui.PAD + 46, top + 53), fill=ui.BACKGROUND)
         ui.icon(d, icon_name, (ui.PAD + 24, top + 31), 44, color)
-        d.text((ui.PAD + 60, top + 22), headline, fill=ui.BACKGROUND, font=ui.font(26, bold=True), anchor="lm")
+        d.text((ui.PAD + 60, top + 22), headline, fill=ui.BACKGROUND,
+               font=ui.fit_font(headline, 26, WIDTH - ui.PAD - 70, bold=True, smallest=14), anchor="lm")
         d.text((ui.PAD + 60, top + 48), subline, fill=ui.BACKGROUND, font=ui.fit_font(subline, 15, WIDTH - ui.PAD - 70),
                anchor="lm")
         self.list.draw(d)
@@ -1281,13 +1333,31 @@ class BroadcastScreen(ui.Screen):
     def __init__(self, report):
         super().__init__()
         self.report = report
-        self.parts = bbqr_parts(report.broadcast_tx)
+        # v7.10: Nunchuk can't load a second copy (Sparrow's Load Transaction): no Tx QR, the
+        # whole txid to find in Nunchuk, and Broadcast transaction there (i18n_host.py)
+        self.nunchuk = i18n.host() == "nunchuk"
+        self.parts = [] if self.nunchuk else bbqr_parts(report.broadcast_tx)
         self.frames = [checked_qr(p, self.QR_BOX) for p in self.parts]
-        self.ok = all(f is not None for f in self.frames)
+        self.ok = bool(self.frames) and all(f is not None for f in self.frames)
         self.index = 0
         self.buttons = ui.bottom_row(["Back"], values=["back"], icons=["back"])
 
+    def draw_nunchuk(self, d):
+        from nonceverify.i18n_host import NUNCHUK_BROADCAST_TEXT, NUNCHUK_BROADCAST_TITLE
+        ui.title(d, NUNCHUK_BROADCAST_TITLE, color=ui.GREEN)
+        size = 17                                        # three lines in every language
+        while size > 12 and len(ui.wrap(NUNCHUK_BROADCAST_TEXT, ui.font(size), WIDTH - 2 * ui.PAD)) > 3:
+            size -= 1
+        y = ui.paragraph(d, NUNCHUK_BROADCAST_TEXT, ui.TOP + 32, size=size, max_lines=3)
+        d.text((ui.PAD, y + 4), "txid", fill=ui.DIM, font=ui.font(14, mono=True))
+        f = ui.font(24, bold=True, mono=True)
+        for i, row in enumerate(txid_rows(self.report.txid)):
+            d.text((WIDTH / 2, y + 36 + i * 30), row, fill=ui.ACCENT if i % 2 == 0 else ui.TEXT, font=f, anchor="mm")
+
     def draw(self, d, image):
+        if self.nunchuk:
+            self.draw_nunchuk(d)
+            return
         x = ui.PAD
         if self.ok:
             frame = self.frames[self.index]

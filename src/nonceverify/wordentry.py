@@ -14,6 +14,7 @@ wordlist of nonceverify (checked against its SHA-256 at load), nothing logged, n
 written anywhere; the words live in one list that is cleared as soon as the mnemonic is
 handed over.
 """
+from nonceverify.i18n import Translated
 from nonceverify import seedqr, ui
 from nonceverify.hw import HEIGHT, WIDTH, Event
 
@@ -101,13 +102,13 @@ class WordEntryScreen(ui.Screen):
         found = matches(self.text)
         d.rounded_rectangle(self.FIELD, radius=4, fill=ui.PANEL, outline=ui.ACCENT, width=1)
         field_cy = (self.FIELD[1] + self.FIELD[3]) / 2
-        d.text((2 * ui.PAD, field_cy), self.text + "_", fill=ui.TEXT, font=ui.font(18, bold=True, mono=True),
+        d.text((2 * ui.PAD, field_cy), Translated(self.text + "_"), fill=ui.TEXT, font=ui.font(18, bold=True, mono=True),
                anchor="lm")
         if self.text and len(found) > self.CAND_SLOTS:
             d.text((WIDTH - 2 * ui.PAD, field_cy), f"{len(found)} words", fill=ui.DIM,
                    font=ui.font(12, mono=True), anchor="rm")
         for slot, word in enumerate(found[:self.CAND_SLOTS]):
-            ui.Button(self.candidate_rect(slot), word, value=("word", word), primary=(len(found) == 1),
+            ui.Button(self.candidate_rect(slot), Translated(word), value=("word", word), primary=(len(found) == 1),
                       size=17).draw(d)
         if not self.text:
             d.text((WIDTH / 2, self.CAND_TOP + self.CAND_H / 2), "type the first letters",
@@ -143,7 +144,7 @@ class WordEntryScreen(ui.Screen):
         x, cy = ui.PAD, self.LABEL_CY
         f_label, f_num, f_of = ui.font(14, bold=True, mono=True), ui.font(28, bold=True), ui.font(18, bold=True)
         ui.spaced(d, (x, cy + 1), "WORD", f_label, ui.DIM, 1, anchor="lm")
-        x += sum(ui.text_width(c, f_label) for c in "WORD") + 3 + 8
+        x += sum(ui.text_width(Translated(c), f_label) for c in ui.t("WORD")) + 3 + 8   # v7.10: translated label
         number = str(self.index + 1)
         d.text((x, cy), number, fill=ui.ACCENT, font=f_num, anchor="lm")
         x += ui.text_width(number, f_num) + 6
@@ -232,13 +233,14 @@ class SeedReviewScreen(ui.Screen):
         else:
             ui.icon(d, "x_circle", (ui.PAD + 11, ui.TOP + 13), 20, ui.RED)
             text, color = "Checksum wrong: tap the wrong word", ui.RED
-        d.text((ui.PAD + 28, ui.TOP + 13), text, fill=color, font=ui.font(16, bold=True), anchor="lm")
+        d.text((ui.PAD + 28, ui.TOP + 13), text, fill=color,
+               font=ui.fit_font(text, 16, WIDTH - 2 * ui.PAD - 28, bold=True), anchor="lm")
         f_num, f_word = ui.font(13, mono=True), ui.font(17 if len(self.words) <= 12 else 15, bold=True)
         for i, rect in enumerate(self.layout()):
             d.rounded_rectangle(rect, radius=4, fill=ui.PANEL, outline=ui.LINE, width=1)
             cy = (rect[1] + rect[3]) / 2
             d.text((rect[0] + 22, cy), f"{i + 1}", fill=ui.DIM, font=f_num, anchor="rm")
-            word = self.words[i] if self.revealed else "•" * 4
+            word = Translated(self.words[i]) if self.revealed else "•" * 4      # v7.10: BIP39 words, never translated
             d.text((rect[0] + 28, cy), word, fill=ui.TEXT if self.revealed else ui.DIM, font=f_word, anchor="lm")
 
     def on_event(self, event):
