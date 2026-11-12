@@ -181,7 +181,23 @@ def emblem(d, cx: int, cy: int, size: int = 96):
     d.text((cx, cy + size * 0.02), "k", fill=BACKGROUND, font=font(int(size * 0.62), bold=True, mono=True), anchor="mm")
 
 
-def header(d, step: int = None, label: str = None):
+# v7.9: the "?" of the help pages, in the free space of the header between the app name and
+# the steps. The tap area is a little larger than the circle, never below the header.
+HELP_CENTER = (229, 15)
+HELP_RECT = (198, 0, 262, 32)
+
+
+def help_icon(d, center=HELP_CENTER, r: int = 11):
+    cx, cy = center
+    d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=ACCENT_DARK, outline=ACCENT, width=2)
+    d.text((cx, cy + 1), "?", fill=ACCENT, font=font(16, bold=True), anchor="mm")
+
+
+def in_help_rect(event, rect=HELP_RECT) -> bool:
+    return event.kind == Event.TAP and rect[0] <= event.x <= rect[2] and rect[1] <= event.y <= rect[3]
+
+
+def header(d, step: int = None, label: str = None, help: bool = False):
     """ Top bar: emblem and app name on the left, the step (or a label) on the right """
     d.rectangle((0, 0, WIDTH, HEADER_H), fill=PANEL)
     d.line((0, HEADER_H, WIDTH, HEADER_H), fill=LINE, width=1)
@@ -207,6 +223,8 @@ def header(d, step: int = None, label: str = None):
             x -= w + 4
     elif label:
         d.text((right, HEADER_H / 2), label, fill=DIM, font=font(13, bold=True, mono=True), anchor="rm")
+    if help:
+        help_icon(d)
 
 
 class Button:
@@ -305,6 +323,7 @@ class Screen:
     """ Base: draw once, then wait for a tap on one of `self.buttons` """
     step = None                       # header step (0 SEED, 1 PSBT, 2 ESITO) or None
     header_label = None
+    help_topic = None                 # v7.9: a nonceverify.guide topic: "?" in the header
 
     def __init__(self):
         self.buttons = []
@@ -314,7 +333,7 @@ class Screen:
 
     def render(self):
         image, d = new_canvas()
-        header(d, self.step, self.header_label)
+        header(d, self.step, self.header_label, help=bool(self.help_topic))
         self.draw(d, image)
         for b in self.buttons:
             b.draw(d)
@@ -337,6 +356,10 @@ class Screen:
             if tick is not None and tick():
                 hw.show(self.render())
             for event in hw.poll():
+                if self.help_topic and in_help_rect(event):
+                    open_help(hw, self.help_topic)          # v7.9: then the same screen again
+                    hw.show(self.render())
+                    continue
                 result = self.on_event(event)
                 if result == "__redraw__":
                     hw.show(self.render())
@@ -345,6 +368,12 @@ class Screen:
             if timeout is not None and time.monotonic() - started > timeout:
                 return None
             hw.wait()
+
+
+def open_help(hw, topic: str):
+    """ v7.9: the help page of `topic` (nonceverify.guide), until Back """
+    from nonceverify import guide              # here: guide imports this module
+    guide.show(hw, topic)
 
 
 class MessageScreen(Screen):

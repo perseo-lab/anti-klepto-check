@@ -21,7 +21,7 @@ from embit.transaction import Transaction, TransactionInput, TransactionOutput  
 from test_nonceverify import (EVIL_K, _rfc6979_sig, _sighash_ht, der, embit_root,      # noqa: E402
     libsecp_sign_psbt, master, p2wpkh_psbt, sighash_of, sign_with_k)
 from test_nonceverify_address import multisig_descriptor                              # noqa: E402
-from test_nonceverify_ui import (DESCRIPTOR_CONFIRM, FULL, LEFT, MIDDLE, RIGHT, SAME_TXID,  # noqa: E402
+from test_nonceverify_ui import (DESCRIPTOR_CONFIRM, DETAILS, FINISH, FULL, LEFT, MIDDLE, RIGHT, SAME_TXID,  # noqa: E402
     SEEDSIGNER, WIPE, FakeHardware, Stop, load_seed_script, text_mode_zbar, ur_parts)  # noqa: F401
 from test_nonceverify_v72 import coldcard_pair, finalize                              # noqa: E402
 
@@ -199,7 +199,7 @@ def test_two_seeds_in_one_power_on_make_the_multisig_green():
     psbt = _multisig(lambda B, z: _rfc6979_sig(B.key.secret, z, 0x01))
     parts = ur_parts(psbt.serialize())
     script_ = load_seed_script(shots=False) + SEEDSIGNER + [RIGHT, ("blank",)] + parts
-    script_ += [SAME_TXID, ("shot", "95_this_seed_clean"), LEFT, WIPE]            # Finish, Wipe
+    script_ += [SAME_TXID, ("shot", "95_this_seed_clean"), DETAILS, FINISH, WIPE]   # v7.9: Details, Finish, Wipe
     from test_nonceverify_ui import TYPE_SEED, WORDS_12, type_word
     script_ += [FULL, TYPE_SEED, WORDS_12]
     for w in SEED_B.split():

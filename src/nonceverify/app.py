@@ -57,7 +57,7 @@ def show_spaces(text: str) -> str:
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.8"
+VERSION = "7.9"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -68,6 +68,11 @@ def btc(sats) -> str:
     if sats is None:
         return "?"
     return f"{sats / 1e8:.8f} BTC"
+
+
+def btc_amount(sats) -> str:
+    """ v7.9: the amount alone, as Sparrow writes it in BTC (the unit is drawn apart) """
+    return "?" if sats is None else f"{sats / 1e8:.8f}"
 
 
 def txid_rows(txid: str) -> list:
@@ -220,6 +225,7 @@ class SplashScreen(ui.Screen):
 
 
 class HomeScreen(ui.Screen):
+    help_topic = "home"  # v7.9: the "?" page
     step = 0
     STEPS = [
         ("qr", "Load the seed", "SeedQR or words, and passphrase: RAM only"),
@@ -245,6 +251,7 @@ class HomeScreen(ui.Screen):
 
 
 class PassphraseQuestionScreen(ui.Screen):
+    help_topic = "seed"  # v7.9: the "?" page
     step = 0
 
     def __init__(self, fingerprint: str, words: int):
@@ -264,6 +271,7 @@ class PassphraseQuestionScreen(ui.Screen):
 
 
 class ConfirmPassphraseScreen(ui.Screen):
+    help_topic = "seed"  # v7.9: the "?" page
     step = 0
 
     def __init__(self, passphrase: str, fingerprint: str):
@@ -307,6 +315,7 @@ class ConfirmPassphraseScreen(ui.Screen):
 
 
 class SeedReadyScreen(ui.Screen):
+    help_topic = "signer"  # v7.9: the "?" page
     step = 1
     GRINDING_Y = 196
     ORDER = (SIGNER__COLDCARD_Q, SIGNER__SEEDSIGNER, SIGNER__TREZOR)
@@ -386,8 +395,11 @@ class ScanScreen:
     PREVIEW = 320
     LEFT = (WIDTH - PREVIEW) // 2
 
-    def __init__(self, heading: str, handle_payload, errors=()):
+    HELP = (4, 132, 76, 190)              # v7.9: "?" in the left panel, above Back
+
+    def __init__(self, heading: str, handle_payload, errors=(), help_topic: str = None):
         self.heading = heading
+        self.help_topic = help_topic
         # v7.7 (Ollen): no mosaic anywhere. A camera filming the screen would film the
         # SeedQR on the paper too: the preview is always the plain camera image.
         self.handle_payload = handle_payload       # payload -> (done: bool, progress: float, note)
@@ -412,10 +424,17 @@ class ScanScreen:
             d.line((x, y, x + dx * k, y), fill=ui.ACCENT, width=3)
             d.line((x, y, x, y + dy * k), fill=ui.ACCENT, width=3)
         ui.emblem(d, self.LEFT // 2, 34, 36)
-        for i, line in enumerate(ui.wrap(self.heading, ui.font(15, bold=True), self.LEFT - 8)[:3]):
-            d.text((self.LEFT / 2, 76 + i * 19), line, fill=ui.ACCENT, font=ui.font(15, bold=True), anchor="mm")
+        # v7.9: a word never split ("SeedSign / er"): the font shrinks to fit the longest one
+        longest = max(self.heading.split(), key=lambda w: ui.text_width(w, ui.font(15, bold=True)), default="")
+        f_head = ui.fit_font(longest, 15, self.LEFT - 8, bold=True)
+        for i, line in enumerate(ui.wrap(self.heading, f_head, self.LEFT - 8)[:3]):
+            d.text((self.LEFT / 2, 76 + i * 19), line, fill=ui.ACCENT, font=f_head, anchor="mm")
         self.back.draw(d)
         self.zoom.draw(d)
+        if self.help_topic:
+            x1, y1, x2, y2 = self.HELP
+            d.rounded_rectangle(self.HELP, radius=5, fill=ui.PANEL, outline=ui.LINE)
+            ui.help_icon(d, ((x1 + x2) // 2, (y1 + y2) // 2), 15)
         # progress ring
         cx, cy, r = (self.LEFT + self.PREVIEW + WIDTH) / 2, 100, 30
         d.ellipse((cx - r, cy - r, cx + r, cy + r), outline=ui.LINE, width=6)
@@ -441,6 +460,8 @@ class ScanScreen:
                 continue
             if self.back.contains(event.x, event.y):
                 return "back"
+            if self.help_topic and ui.in_help_rect(event, self.HELP):
+                return "help"
             if self.zoom.contains(event.x, event.y):
                 steps = (1, 2, 3)
                 z = steps[(steps.index(hw.zoom) + 1) % len(steps)] if hw.zoom in steps else 1
@@ -468,8 +489,13 @@ class ScanScreen:
             got_frame = False
             while True:
                 ui.housekeeping(hw)
-                if self._taps(hw) == "back":
+                tapped = self._taps(hw)
+                if tapped == "back":
                     return None
+                if tapped == "help":
+                    ui.open_help(hw, self.help_topic)          # v7.9; the camera keeps running
+                    hw.show(self.compose(None))
+                    continue
                 frame = hw.camera_frame()
                 if frame is None:
                     if not got_frame and time.monotonic() - started > self.NO_FRAME_TIMEOUT_S:
@@ -482,9 +508,15 @@ class ScanScreen:
                     got_frame = True
                     self.status = ""
                 payload = decode_qr(frame)
-                if payload is None and self._taps(hw) == "back":
+                if payload is None:
                     # extra touch sample between the slow steps (decode, display)
-                    return None
+                    tapped = self._taps(hw)
+                    if tapped == "back":
+                        return None
+                    if tapped == "help":
+                        ui.open_help(hw, self.help_topic)
+                        hw.show(self.compose(None))
+                        continue
                 if payload is not None:
                     try:
                         done, self.progress, note = self.handle_payload(payload)
@@ -514,6 +546,7 @@ class TxidCheckScreen(ui.Screen):
     field tests the comparison was forgotten: now it is a step that can't be skipped.
     v7.8 (Ollen): the v7.5 quiz on the txid ending is gone: read it, then confirm.
     """
+    help_topic = "txid"  # v7.9: the "?" page
     step = 2
 
     def __init__(self, report):
@@ -544,14 +577,31 @@ def can_export(report, txid_confirmed: bool) -> bool:
 
 
 class ResultScreen(ui.Screen):
+    """
+    v7.9 (Ollen, 12 Nov 2026): with the txid confirmed and the nonces clean (green, or a
+    yellow that is not a red), the result opens on a fixed summary page, no scrolling:
+    where the money goes (amount and the whole destination address), the change and
+    whether it is proven yours, the fee. Everything else (txid, XFP, inputs, outputs,
+    locktime) is on the Details page, with Finish. A red or an incomplete check keeps the
+    scrolling list, reason first.
+    """
+    help_topic = "result"  # v7.9: the "?" page
     step = 2
     BANNER_H = 62
+    SUMMARY_BANNER_H = 40
+    SENDS_CARD = (ui.PAD, ui.HEADER_H + 46, WIDTH - ui.PAD, ui.HEADER_H + 118)
+    CHANGE_CARD = (ui.PAD, ui.HEADER_H + 122, WIDTH - ui.PAD, ui.HEADER_H + 194)
+    FEE_Y = ui.HEADER_H + 208
+    NOTE_Y = ui.HEADER_H + 225
 
-    def __init__(self, report, signer: str = None, txid_confirmed: bool = False):
+    def __init__(self, report, signer: str = None, txid_confirmed: bool = False, details: bool = False):
         super().__init__()
         self.report = report
         self.signer = signer
         self.txid_confirmed = txid_confirmed
+        self.details = details
+        self.summary = (not details and txid_confirmed and report.verdict in (VERDICT__OK, VERDICT__PARTIAL)
+                        and not self.seed_mismatch())
         lines = []
         add = lambda text, color=ui.TEXT, size=17, mono=False: lines.append((text, color, size, mono))
         colors = {STATUS__OK: ui.GREEN, STATUS__FAIL: ui.RED, STATUS__UNSIGNED: ui.YELLOW,
@@ -597,11 +647,6 @@ class ResultScreen(ui.Screen):
                 add(line, ui.YELLOW, 15)
         if not ours and not unverified and report.verdict != VERDICT__FAIL:
             add("No change back to this wallet", ui.DIM, 15)
-        if can_export(report, txid_confirmed) and not report.change_warning:
-            # v7.8 (Ollen): the result first, then what to do with it
-            for line in ui.wrap("Broadcast THIS: tap Broadcast, then in Sparrow File > Load Transaction > "
-                                "From QR. Only these bytes are the ones checked.", ui.font(16, bold=True), width):
-                add(line, ui.ACCENT, 16)
         add(f"XFP {report.fingerprint} · {who}", ui.DIM, 15, True)
         add("txid" + (" (same as Sparrow's)" if txid_confirmed else ""), ui.DIM, 15, True)
         for row in txid_rows(report.txid):
@@ -637,7 +682,19 @@ class ResultScreen(ui.Screen):
         add(f"Fee: {btc(report.fee)}", ui.TEXT, 17)
         self.list = ui.ScrollList(lines, ui.HEADER_H + self.BANNER_H + 8, HEIGHT - ui.BUTTON_H - 2 * ui.PAD)
         self.can_export = can_export(report, txid_confirmed)
-        if self.can_export:
+        if self.summary:
+            # v7.9: Finish moves to Details (Ollen); what to do with the result stays here
+            if self.can_export:
+                self.buttons = ui.bottom_row(["Details", "Broadcast", "Next PSBT"],
+                                             primary_index=2 if report.change_warning else 1,
+                                             values=["details", "txqr", "again"], icons=[None, "qr", "camera"])
+            else:
+                self.buttons = ui.bottom_row(["Details", "Next PSBT"], primary_index=1, values=["details", "again"],
+                                             icons=[None, "camera"])
+        elif details:
+            self.buttons = ui.bottom_row(["Finish", "Back"], primary_index=1, values=["done", "back"],
+                                         icons=["power", "back"])
+        elif self.can_export:
             self.buttons = ui.bottom_row(["Finish", "Broadcast", "Next PSBT"],
                                          primary_index=2 if report.change_warning else 1,
                                          values=["done", "txqr", "again"], icons=["power", "qr", "camera"])
@@ -674,7 +731,124 @@ class ResultScreen(ui.Screen):
             return ui.RED, "x_circle", "DO NOT BROADCAST", "a signature or the transaction is not what it must be"
         return ui.YELLOW, "warning", "INCOMPLETE CHECK", "not everything can be verified: not green"
 
+    def summary_banner(self):
+        """ v7.9: (color, icon, headline, subline), short enough for the 40-pixel banner """
+        r = self.report
+        if r.verdict == VERDICT__OK and r.change_unverified:
+            return ui.YELLOW, "warning", "CHANGE NOT VERIFIED", "do not broadcast yet"
+        if r.verdict == VERDICT__OK and r.change_warning:
+            return ui.YELLOW, "warning", "CHANGE?", "nonce OK · check below"
+        if r.verdict == VERDICT__OK:
+            who = signer_name(self.signer) if self.signer in SIGNERS else None
+            return ui.GREEN, "ok_circle", "NONCE OK", f"{who} · txid OK" if who else "txid OK"
+        if r.unchecked_cosigners:
+            return ui.YELLOW, "warning", "THIS SEED: CLEAN", f"{r.unchecked_cosigners} cosigner sig. to check"
+        return ui.YELLOW, "warning", "THIS SEED: CLEAN", "not complete"
+
+    def summary_note(self):
+        """ v7.9: one line under the fee when something must be read in Details """
+        r = self.report
+        if r.verdict == VERDICT__PARTIAL and r.unchecked_cosigners:
+            return "Do not broadcast yet: cosigners to check, see Details", ui.YELLOW
+        if r.verdict == VERDICT__PARTIAL:
+            return "Not fully signed yet: scan again when it is", ui.YELLOW
+        if r.extra_fields:
+            return f"{r.extra_fields} extra PSBT field(s): broadcast only with Broadcast", ui.YELLOW
+        return None, None
+
+    def card_texts(self):
+        """ v7.9: (sends, change) cards: (label, label color, sats, [(line, color, mono)], outline) """
+        r = self.report
+        external = [o for o in r.outputs if o.owner == OWNER__EXTERNAL]
+        ours = [o for o in r.outputs if o.owner == OWNER__OURS]
+        unverified = [o for o in r.outputs if o.owner == OWNER__UNVERIFIED]
+        width = self.SENDS_CARD[2] - self.SENDS_CARD[0] - 20
+        if len(external) == 1:
+            lines = address_lines(external[0].address, width)
+            sends = ("SENDS TO", ui.TEXT, external[0].amount, [(ln, ui.TEXT, True) for ln in lines], ui.LINE)
+        elif external:
+            sends = ("SENDS TO", ui.TEXT, sum(o.amount for o in external),
+                     [(f"{len(external)} addresses: each one in Details", ui.TEXT, False)], ui.LINE)
+        else:
+            sends = ("SENDS TO", ui.TEXT, 0, [("no other address: it all stays in", ui.DIM, False),
+                                             ("this wallet", ui.DIM, False)], ui.LINE)
+        if unverified:
+            note = ui.wrap("Not proven yours. Load the descriptor (Address > Multisig), scan again",
+                           ui.font(16), width)[:2]
+            change = ("CHANGE NOT VERIFIED", ui.YELLOW, sum(x.amount for x in unverified),
+                      [(ln, ui.YELLOW, False) for ln in note], ui.YELLOW)
+        elif ours:
+            if len(ours) == 1:
+                o = ours[0]
+                first = (f"{o.label} · {o.path}", ui.DIM, False)
+            else:
+                first = (f"{len(ours)} outputs, all yours: see Details", ui.DIM, False)
+            notes = "; ".join(x.note for x in ours if x.note)
+            if notes:
+                # the reason takes both lines (the path is in Details); cut with … only if longer
+                wrapped = ui.wrap(f"{first[0].split(' · ')[0]}: {notes}" if len(ours) == 1 else notes,
+                                  ui.font(16), width)
+                if len(wrapped) > 2:
+                    wrapped = wrapped[:1] + [wrapped[1][:-2] + "…"]
+                lines = [(ln, ui.YELLOW, False) for ln in wrapped]
+                outline = ui.YELLOW
+            else:
+                lines = [first, ("proven from your seed", ui.DIM, False)]
+                outline = ui.LINE
+            change = ("CHANGE", ui.GREEN, sum(x.amount for x in ours), lines, outline)
+        else:
+            change = ("CHANGE", ui.DIM, None, [("no change back to this wallet", ui.DIM, False)], ui.LINE)
+        return sends, change
+
+    def draw_card(self, d, rect, card, yours: bool = False):
+        label, label_color, sats, lines, outline = card
+        x1, y1, x2, y2 = rect
+        d.rounded_rectangle(rect, radius=6, fill=ui.PANEL, outline=outline, width=2 if outline != ui.LINE else 1)
+        cy = y1 + 15
+        d.text((x1 + 10, cy), label, fill=label_color, font=ui.font(15, bold=True), anchor="lm")
+        if yours:
+            x = x1 + 10 + ui.text_width(label, ui.font(15, bold=True)) + 16
+            check_mark(d, x, cy, 7, ui.GREEN)
+            d.text((x + 11, cy), "YOURS", fill=ui.GREEN, font=ui.font(15, bold=True), anchor="lm")
+        if sats is not None:
+            f_unit = ui.font(13, bold=True)
+            unit_w = ui.text_width("BTC", f_unit)
+            d.text((x2 - 10, cy + 3), "BTC", fill=ui.DIM, font=f_unit, anchor="rm")
+            d.text((x2 - 16 - unit_w, cy), btc_amount(sats), fill=ui.TEXT, font=ui.font(24, bold=True, mono=True),
+                   anchor="rm")
+        y = y1 + 30
+        widest = max((t for t, _c, m in lines[:2] if m), key=len, default="")
+        f_mono = ui.fit_font(widest, 17, x2 - x1 - 20, mono=True)      # both address lines one size
+        for text, color, mono in lines[:2]:
+            f = f_mono if mono else ui.fit_font(text, 16, x2 - x1 - 20)
+            d.text((x1 + 10, y), text, fill=color, font=f, anchor="lt")
+            y += 20
+
+    def draw_summary(self, d):
+        color, icon_name, headline, subline = self.summary_banner()
+        top, h = ui.HEADER_H, self.SUMMARY_BANNER_H
+        d.rectangle((0, top, WIDTH, top + h), fill=color)
+        ui.icon(d, icon_name, (ui.PAD + 14, top + h / 2), 26, ui.BACKGROUND)
+        d.text((ui.PAD + 34, top + h / 2), headline, fill=ui.BACKGROUND, font=ui.font(22, bold=True), anchor="lm")
+        head_w = ui.text_width(headline, ui.font(22, bold=True))
+        room = WIDTH - 2 * ui.PAD - 34 - head_w - 12
+        d.text((WIDTH - ui.PAD, top + h / 2 + 1), subline, fill=ui.BACKGROUND,
+               font=ui.fit_font(subline, 14, room, bold=True), anchor="rm")
+        sends, change = self.card_texts()
+        self.draw_card(d, self.SENDS_CARD, sends)
+        self.draw_card(d, self.CHANGE_CARD, change, yours=change[0] == "CHANGE" and change[2] is not None)
+        d.text((ui.PAD + 10, self.FEE_Y), "Fee", fill=ui.DIM, font=ui.font(16), anchor="lm")
+        d.text((WIDTH - ui.PAD - 10, self.FEE_Y), btc(self.report.fee), fill=ui.TEXT, font=ui.font(18, mono=True),
+               anchor="rm")
+        note, note_color = self.summary_note()
+        if note:
+            d.text((WIDTH / 2, self.NOTE_Y), note, fill=note_color, font=ui.fit_font(note, 14, WIDTH - 2 * ui.PAD),
+                   anchor="mm")
+
     def draw(self, d, image):
+        if self.summary:
+            self.draw_summary(d)
+            return
         color, icon_name, headline, subline = self.banner()
         top = ui.HEADER_H
         d.rectangle((0, top, WIDTH, top + self.BANNER_H), fill=color)
@@ -686,6 +860,8 @@ class ResultScreen(ui.Screen):
         self.list.draw(d)
 
     def on_event(self, event):
+        if self.summary:
+            return super().on_event(event)          # v7.9: a fixed page, nothing to scroll
         if event.kind == Event.SWIPE_UP:
             self.list.scroll(46)
             return "__redraw__"
@@ -734,6 +910,7 @@ class WorkingScreen:
 # v7: check an address
 # ---------------------------------------------------------------------------------------
 class AddressModeScreen(ui.Screen):
+    help_topic = "address"  # v7.9: the "?" page
     header_label = "ADDRESS"
 
     def __init__(self, descriptor=None):
@@ -759,6 +936,7 @@ class DescriptorScreen(ui.Screen):
     The descriptor just scanned: what it is, which key is this seed's (verified by
     derivation), and the cosigners' keys to compare by eye with the paper backup.
     """
+    help_topic = "descriptor"  # v7.9: the "?" page
     header_label = "DESCRIPTOR"
 
     def __init__(self, desc, check):
@@ -864,6 +1042,7 @@ class KeyCheckScreen(ui.Screen):
     depends on the public key (pick_groups): the leading part is chain code and public
     metadata and can be copied into a look-alike key.
     """
+    help_topic = "descriptor"  # v7.9: the "?" page
     header_label = "DESCRIPTOR"
     COLS = 7
 
@@ -907,6 +1086,7 @@ class KeyCheckScreen(ui.Screen):
 
 class ThresholdScreen(ui.Screen):
     """ v7.5: M-of-N confirmed against the paper (an extra key + threshold 1 changed only the title) """
+    help_topic = "descriptor"  # v7.9: the "?" page
     header_label = "DESCRIPTOR"
 
     def __init__(self, desc):
@@ -925,6 +1105,7 @@ class ThresholdScreen(ui.Screen):
 
 
 class AddressResultScreen(ui.Screen):
+    help_topic = "address"  # v7.9: the "?" page
     header_label = "ADDRESS"
     BANNER_H = 62
 
@@ -1014,6 +1195,17 @@ def indexed(explorer) -> bool:
     return getattr(explorer, "wildcard", lambda: True)()
 
 
+def address_lines(text: str, width: int) -> list:
+    """ v7.9: the whole address in groups of four, in at most two lines (the font shrinks if needed) """
+    groups = address.grouped(text).split(" ")
+    half = (len(groups) + 1) // 2                    # two balanced lines, never a lone group
+    lines = [" ".join(groups[:half]), " ".join(groups[half:])] if len(groups) > 1 else groups
+    lines = [ln for ln in lines if ln]
+    if all(ui.text_width(ln, ui.font(14, mono=True)) <= width for ln in lines):
+        return lines
+    return ui.wrap(" ".join(groups), ui.font(14, mono=True), width)
+
+
 def short_address(text: str, f, width: int) -> str:
     """ The address in groups of four, the middle elided if it doesn't fit """
     full = address.grouped(text)
@@ -1081,6 +1273,7 @@ class BroadcastScreen(ui.Screen):
     broadcast. A segwit txid does not cover the signatures: only these bytes are the
     ones checked (independent review, 10 Nov 2026).
     """
+    help_topic = "broadcast"  # v7.9: the "?" page
     step = 2
     QR_BOX = 228
     FRAME_S = 0.6
@@ -1106,8 +1299,9 @@ class BroadcastScreen(ui.Screen):
         width = WIDTH - ui.PAD - x
         d.text((x, ui.TOP + 12), "Broadcast THIS", fill=ui.GREEN, font=ui.font(19, bold=True), anchor="lm")
         y = ui.TOP + 30
-        for line in ui.wrap("Sparrow: File > Load Transaction > From QR, then Broadcast. The txid must "
-                            "be the same as before.", ui.font(14), width):
+        # v7.9 (Ollen): Sparrow opens the loaded transaction in a NEW tab: broadcast from that one
+        for line in ui.wrap("Sparrow: File > Load Transaction > From QR. It opens a NEW tab: same txid? "
+                            "Broadcast from that tab, close the old one.", ui.font(14), width):
             d.text((x, y), line, fill=ui.TEXT, font=ui.font(14))
             y += 18
         y += 6
@@ -1126,6 +1320,10 @@ class BroadcastScreen(ui.Screen):
             if tick is not None and tick():
                 hw.show(self.render())
             for event in hw.poll():
+                if ui.in_help_rect(event):
+                    ui.open_help(hw, self.help_topic)          # v7.9
+                    hw.show(self.render())
+                    continue
                 result = self.on_event(event)
                 if result is not None and result != "__redraw__":
                     return result
@@ -1137,6 +1335,7 @@ class BroadcastScreen(ui.Screen):
 
 
 class ExplorerWalletScreen(ui.Screen):
+    help_topic = "explorer"  # v7.9: the "?" page
     header_label = "EXPLORER"
 
     def __init__(self, descriptor=None):
@@ -1156,6 +1355,7 @@ class ExplorerWalletScreen(ui.Screen):
 
 
 class ExplorerListScreen(ui.Screen):
+    help_topic = "explorer"  # v7.9: the "?" page
     header_label = "EXPLORER"
     ROW_TOP = ui.TOP + 66
     ROW_H = 40
@@ -1211,6 +1411,7 @@ class ExplorerListScreen(ui.Screen):
 
 
 class AddressDetailScreen(ui.Screen):
+    help_topic = "explorer"  # v7.9: the "?" page
     header_label = "EXPLORER"
     QR_SIZE = 222
 
@@ -1288,7 +1489,7 @@ def scan_address(hw):
         found["address"] = address.parse_address(payload)
         return True, 1.0, ""
 
-    if ScanScreen("Address", on_payload, errors=(address.AddressError,)).run(hw) is None:
+    if ScanScreen("Address", on_payload, errors=(address.AddressError,), help_topic="address").run(hw) is None:
         return None
     return found["address"]
 
@@ -1301,7 +1502,8 @@ def load_descriptor(hw, session) -> bool:
         collector.add(payload)
         return collector.complete, collector.progress, "QR of another descriptor: starting over" if collector.restarted else ""
 
-    if ScanScreen("Descriptor from backup", on_payload, errors=(address.DescriptorError,)).run(hw) is None:
+    if ScanScreen("Descriptor from backup", on_payload, errors=(address.DescriptorError,),
+                  help_topic="descriptor").run(hw) is None:
         return False
     desc = collector.result
     check = address.check_seed_in_descriptor(desc, session.master)
@@ -1425,7 +1627,7 @@ def load_seed(hw, session: Session, method: str = "scan_seed") -> bool:
             found["mnemonic"] = seedqr.decode(payload)
             return True, 1.0, ""
 
-        if ScanScreen("SeedQR", on_payload).run(hw) is None:
+        if ScanScreen("SeedQR", on_payload, help_topic="seed").run(hw) is None:
             return False
         mnemonic = found.pop("mnemonic")
     words = len(mnemonic.split())
@@ -1460,7 +1662,7 @@ def check_psbt(hw, session: Session) -> str:
                          "At the end, broadcast the Tx QR shown here.",
                          buttons=("Scan",), heading_color=ui.ACCENT, icon_name="camera").run(hw)
     heading = f"PSBT · {signer_name(session.signer)}"
-    if ScanScreen(heading, on_payload).run(hw) is None:
+    if ScanScreen(heading, on_payload, help_topic="scan_psbt").run(hw) is None:
         return "back"
     try:
         first = collector.result
@@ -1521,9 +1723,14 @@ def check_psbt(hw, session: Session) -> str:
             # signer: it is not recorded as red for the other seeds and devices of a multisig
     while True:
         choice = ResultScreen(report, session.signer, txid_confirmed=confirmed).run(hw)
-        if choice != "txqr":
+        if choice == "txqr":
+            BroadcastScreen(report).run(hw)
+        elif choice == "details":
+            # v7.9: txid, XFP, inputs, outputs; Finish is here, Back returns to the summary
+            if ResultScreen(report, session.signer, txid_confirmed=confirmed, details=True).run(hw) == "done":
+                return "done"
+        else:
             return choice
-        BroadcastScreen(report).run(hw)
 
 
 def scan_second(hw, heading: str, final: bool):
@@ -1543,7 +1750,7 @@ def scan_second(hw, heading: str, final: bool):
             return True, 1.0, ""
         return False, collector.progress, "QR of another PSBT: starting over" if collector.restarted else ""
 
-    if ScanScreen(heading, on_payload).run(hw) is None:
+    if ScanScreen(heading, on_payload, help_topic="scan_psbt").run(hw) is None:
         return None
     return state["result"]
 

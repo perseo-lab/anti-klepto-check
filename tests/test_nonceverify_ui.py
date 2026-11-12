@@ -121,6 +121,8 @@ FULL = ("tap", 240, 288)
 MIDDLE = FULL                               # middle of three bottom buttons ("Address" on the seed screen)
 SAME_TXID = RIGHT                           # v7: the txid step before every green
 WIPE = LEFT                                 # v7.5: confirm_wipe, "Wipe" on the left ("Keep" right)
+DETAILS = LEFT                              # v7.9: result summary, "Details" on the left
+FINISH = LEFT                               # v7.9: Details page, "Finish" on the left ("Back" right)
 # v7.5: a 2-of-3 descriptor with this seed's key: "Check keys", the two other keys "Same on
 # paper", then "Yes, 2 of 3"
 DESCRIPTOR_CONFIRM = [RIGHT, ("shot", "60b_key_check"), RIGHT, RIGHT, ("shot", "60c_threshold"), RIGHT]
@@ -222,7 +224,8 @@ def test_full_flow_ok():
     script = load_seed_script() + SEEDSIGNER
     script += [RIGHT, ("blank",)] + ur_parts(psbt.serialize())
     script += [SAME_TXID, ("shot", "07_result_ok"), ("swipe_up",), ("swipe_up",), ("swipe_up",), ("shot", "08_result_ok_scrolled")]
-    script += [LEFT, ("shot", "09_seed_wiped"), FULL, ("shot", "10_home_again"), ("stop",)]
+    script += [DETAILS, ("shot", "08b_details"), FINISH, WIPE, ("shot", "09_seed_wiped"), FULL,
+               ("shot", "10_home_again"), ("stop",)]
     hw = FakeHardware(script)
     with pytest.raises(Stop):
         app.run(hw)
@@ -359,7 +362,7 @@ def test_scan_needs_a_signer_after_every_seed_load():
     script = load_seed_script(shots=False)
     script += [RIGHT, ("shot", "18_must_choose")]                 # nothing chosen: stays here
     script += SEEDSIGNER + [RIGHT, ("blank",)] + ur_parts(psbt.serialize()) + [SAME_TXID, ("shot", "19_green")]
-    script += [LEFT, WIPE, FULL]                                  # Finish, Wipe (v7.5): seed wiped, home
+    script += [DETAILS, FINISH, WIPE, FULL]                       # v7.9: Details, Finish, Wipe: seed wiped, home
     script += load_seed_script(shots=False)[1:] + [RIGHT, ("shot", "20_must_choose_again"), ("stop",)]
     hw = FakeHardware(script)
     with pytest.raises(Stop):

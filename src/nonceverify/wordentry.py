@@ -37,6 +37,7 @@ def next_letters(prefix: str) -> set:
 
 class WordCountScreen(ui.Screen):
     step = 0
+    help_topic = "seed"  # v7.9: the "?" page
 
     def __init__(self):
         super().__init__()
@@ -53,6 +54,7 @@ class WordCountScreen(ui.Screen):
 class WordEntryScreen(ui.Screen):
     """ Typing word `index` (0-based) of `count`. Returns ("word", w), ("prev",) or ("cancel",) """
     step = 0
+    help_topic = "seed"  # v7.9: the "?" page
     ROWS = ("qwertyuiop", "asdfghjkl", "zxcvbnm")
     KEY_W = 46
     KEY_H = 42                  # v7.4: 44 -> 42, room for the larger "WORD N of M" row
@@ -188,6 +190,7 @@ class SeedReviewScreen(ui.Screen):
     ("edit", index) or "cancel".
     """
     step = 0
+    help_topic = "seed"  # v7.9: the "?" page
     GRID_TOP = ui.TOP + 30
 
     def __init__(self, words: list):
