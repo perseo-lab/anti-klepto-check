@@ -1,0 +1,4 @@
+babel==2.18.0
+coincurve==21.0.0
+pytest==7.4.2
+setuptools==84.2.1
