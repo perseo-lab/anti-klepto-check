@@ -132,9 +132,9 @@ def test_nunchuk_broadcast_shows_the_txid_and_no_qr(monkeypatch, lang):
     assert not any("Load Transaction" in s for s in seen)
 
 
-def test_sparrow_broadcast_still_has_the_qr():
+def test_sparrow_broadcast_still_has_the_qr(monkeypatch):
     i18n.set_language("es")
-    app.decode_qr = lambda im: __import__("pyzbar.pyzbar", fromlist=["x"]).decode(im.convert("L"))[0].data
+    monkeypatch.setattr(app, "decode_qr", lambda im: __import__("pyzbar.pyzbar", fromlist=["x"]).decode(im.convert("L"))[0].data)
     screen = app.BroadcastScreen(green_report())
     assert screen.ok and screen.frames
 
@@ -186,7 +186,7 @@ def screens():
 def test_every_screen_fits_and_is_translated(monkeypatch, lang, host):
     i18n.set_language(lang)
     i18n.set_host(host)
-    app.decode_qr = lambda im: __import__("pyzbar.pyzbar", fromlist=["x"]).decode(im.convert("L"))[0].data
+    monkeypatch.setattr(app, "decode_qr", lambda im: __import__("pyzbar.pyzbar", fromlist=["x"]).decode(im.convert("L"))[0].data)
     problems, english = [], set()
     orig_draw, orig_tr = ui.Draw.text, i18n._translate
     keys = set(KEYS.values())
