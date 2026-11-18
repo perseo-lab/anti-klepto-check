@@ -1,5 +1,5 @@
 """
-v7.9 (Ollen, 10-12 Nov 2026): "what to do and why", one page per step, opened with the
+v7.9: "what to do and why", one page per step, opened with the
 "?" in the header (in the scan screens: the "?" on the left, above Back). The pages are
 plain text, written here once; the screens only name their topic.
 

@@ -112,7 +112,7 @@ def _tx_qr_part(shot):
 
 
 def test_green_result_first_then_broadcast_shows_the_tx_qr():
-    """ v7.8 (Ollen): the result first, with "Broadcast THIS"; the Broadcast button shows the Tx QR """
+    """ v7.8: the result first, with "Broadcast THIS"; the Broadcast button shows the Tx QR """
     psbt, keys, amounts = p2wpkh_psbt(2)
     psbt.sign_with(embit_root())
     script_ = load_seed_script(shots=False) + SEEDSIGNER + [RIGHT, ("blank",)] + ur_parts(psbt.serialize())
@@ -136,7 +136,7 @@ def test_txid_different_is_red():
 
 
 def test_no_quiz_on_the_txid_ending():
-    """ v7.8 (Ollen, 10 Nov 2026): read the txid and confirm, no multiple choice after it """
+    """ v7.8: read the txid and confirm, no multiple choice after it """
     assert not hasattr(app, "TxidEndingScreen")
     psbt, keys, amounts = p2wpkh_psbt(1)
     psbt.sign_with(embit_root())
@@ -492,7 +492,7 @@ def test_seed_words_and_passphrase_hidden_until_show():
 
 
 def test_seedqr_preview_is_the_plain_camera_image():
-    """ v7.7 (Ollen, 10 Nov 2026): no mosaic in any function; the preview is the camera image """
+    """ v7.7: no mosaic in any function; the preview is the camera image """
     import inspect
     import qrcode
     assert "private" not in inspect.signature(app.ScanScreen).parameters

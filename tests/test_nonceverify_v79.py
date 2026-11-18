@@ -1,5 +1,5 @@
 """
-v7.9 (Ollen, 12 Nov 2026): the result opens on a fixed summary page, nothing to scroll:
+v7.9: the result opens on a fixed summary page, nothing to scroll:
 where the money goes (amount and the whole destination address), the change and whether
 it is proven yours, the fee, in large type. Txid, XFP, inputs and outputs are on the
 Details page, with Finish. Amounts in BTC. A red keeps the scrolling list, reason first.
@@ -211,7 +211,7 @@ def test_broadcast_screen_mentions_the_new_tab():
 
 
 # ---------------------------------------------------------------------------------------
-# v7.9: "?" help pages, what to do and why (Ollen chose the "?" over a fixed "Why" line)
+# v7.9: "?" help pages, what to do and why
 # ---------------------------------------------------------------------------------------
 from nonceverify import guide, wordentry                                          # noqa: E402
 from nonceverify.hw import Event                                                  # noqa: E402

@@ -1,5 +1,5 @@
 """
-v7.6 (Ollen, 10 Nov 2026): "in a transaction with change, check the change address and
+v7.6: "in a transaction with change, check the change address and
 confirm it is mine". Single-sig: the key is derived here from the seed. Multisig: the
 address must be the confirmed descriptor's. Declared as ours but not ours: red.
 """

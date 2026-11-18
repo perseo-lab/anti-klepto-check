@@ -1,5 +1,5 @@
 """
-v7.4 (Ollen, 9 Nov 2026): the splash stays until START and says what is checked; the
+v7.4: the splash stays until START and says what is checked; the
 word entry shows "WORD N of M" large, with a progress bar.
 """
 import inspect

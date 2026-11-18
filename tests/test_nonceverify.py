@@ -817,7 +817,7 @@ def test_review3_bbqr_failure_does_not_get_stuck():
     assert c.result == good
 
 
-# v3: SIGHASH_ALL everywhere (Ollen, 7 Nov 2026)
+# v3: SIGHASH_ALL everywhere
 from nonceverify.psbt import p2pkh_script
 DANGEROUS_SIGHASHES = (0x02, 0x03, 0x81, 0x82, 0x83)       # NONE, SINGLE, ALL|ACP, NONE|ACP, SINGLE|ACP
 

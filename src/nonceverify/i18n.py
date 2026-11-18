@@ -1,5 +1,5 @@
 """
-v7.10 (Ollen, 12 Nov 2026): the interface in five languages and two hosts.
+v7.10: the interface in five languages and two hosts.
 
 - Language: English (default), Italiano, Français, Español, Deutsch.
 - Host (the coordinator the PSBT comes from and the transaction goes back to): Sparrow

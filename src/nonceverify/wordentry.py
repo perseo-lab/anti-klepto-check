@@ -140,7 +140,7 @@ class WordEntryScreen(ui.Screen):
     BAR_LEFT = 196
 
     def draw_position(self, d):
-        """ v7.4 (Ollen, 9 Nov 2026): the word being typed, readable at a glance """
+        """ v7.4: the word being typed, readable at a glance """
         x, cy = ui.PAD, self.LABEL_CY
         f_label, f_num, f_of = ui.font(14, bold=True, mono=True), ui.font(28, bold=True), ui.font(18, bold=True)
         ui.spaced(d, (x, cy + 1), "WORD", f_label, ui.DIM, 1, anchor="lm")

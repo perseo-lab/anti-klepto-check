@@ -89,7 +89,7 @@ SPLASH_FEATURES = (
     ("Sighash ALL", "no ANYONECANPAY / NONE"),
     ("Txid match", "broadcast what was checked"),
     ("Address check", "single-sig & multisig"),
-    ("Change check", "your change, proven yours"),      # v7.6 (Ollen)
+    ("Change check", "your change, proven yours"),      # v7.6
     ("Air-gapped", "microSD read-only"),
 )
 
@@ -100,7 +100,7 @@ def _blend(c0, c1, t: float):
 
 def splash_background():
     """
-    v7.4 (Ollen, 9 Nov 2026): the splash without its START button. A flat grid above a
+    v7.4: the splash without its START button. A flat grid above a
     horizon, a teal floor in perspective below it, the emblem with a halo, the name, and a
     panel with the four checks. Plain PIL drawing, no blur: a few hundred lines and four
     alpha composites, drawn once per boot and kept.
@@ -188,7 +188,7 @@ class SplashScreen(ui.Screen):
     EMBLEM_SIZE = 76
     PANEL = (40, 138, 440, 232)       # v7.6: three rows (six checks)
     START = (140, 240, 340, 276)
-    # v7.10 (Ollen): host top left, language top right, either side of the emblem. In RAM
+    # v7.10: host top left, language top right, either side of the emblem. In RAM
     # only (i18n): never written to the microSD, English and Sparrow again at power-on.
     CHIP_TOP, CHIP_BOTTOM = 4, 36
     HOST_LEFT, HOST_W = 6, 76
@@ -439,7 +439,7 @@ class ScanScreen:
     def __init__(self, heading: str, handle_payload, errors=(), help_topic: str = None):
         self.heading = heading
         self.help_topic = help_topic
-        # v7.7 (Ollen): no mosaic anywhere. A camera filming the screen would film the
+        # v7.7: no mosaic anywhere. A camera filming the screen would film the
         # SeedQR on the paper too: the preview is always the plain camera image.
         self.handle_payload = handle_payload       # payload -> (done: bool, progress: float, note)
         self.errors = (transport.TransportError, seedqr.SeedQRError) + tuple(errors)
@@ -585,7 +585,7 @@ class TxidCheckScreen(ui.Screen):
     the txid with Sparrow's (the transaction tab). The nonce check says THIS PSBT is
     clean; the txid ties it to the transaction Sparrow will broadcast. In the first two
     field tests the comparison was forgotten: now it is a step that can't be skipped.
-    v7.8 (Ollen): the v7.5 quiz on the txid ending is gone: read it, then confirm.
+    v7.8: the v7.5 quiz on the txid ending is gone: read it, then confirm.
     """
     help_topic = "txid"  # v7.9: the "?" page
     step = 2
@@ -619,7 +619,7 @@ def can_export(report, txid_confirmed: bool) -> bool:
 
 class ResultScreen(ui.Screen):
     """
-    v7.9 (Ollen, 12 Nov 2026): with the txid confirmed and the nonces clean (green, or a
+    v7.9: with the txid confirmed and the nonces clean (green, or a
     yellow that is not a red), the result opens on a fixed summary page, no scrolling:
     where the money goes (amount and the whole destination address), the change and
     whether it is proven yours, the fee. Everything else (txid, XFP, inputs, outputs,
@@ -724,7 +724,7 @@ class ResultScreen(ui.Screen):
         self.list = ui.ScrollList(lines, ui.HEADER_H + self.BANNER_H + 8, HEIGHT - ui.BUTTON_H - 2 * ui.PAD)
         self.can_export = can_export(report, txid_confirmed)
         if self.summary:
-            # v7.9: Finish moves to Details (Ollen); what to do with the result stays here
+            # v7.9: Finish moves to Details; what to do with the result stays here
             if self.can_export:
                 self.buttons = ui.bottom_row(["Details", "Broadcast", "Next PSBT"],
                                              primary_index=2 if report.change_warning else 1,
@@ -1369,7 +1369,7 @@ class BroadcastScreen(ui.Screen):
         width = WIDTH - ui.PAD - x
         d.text((x, ui.TOP + 12), "Broadcast THIS", fill=ui.GREEN, font=ui.font(19, bold=True), anchor="lm")
         y = ui.TOP + 30
-        # v7.9 (Ollen): Sparrow opens the loaded transaction in a NEW tab: broadcast from that one
+        # v7.9: Sparrow opens the loaded transaction in a NEW tab: broadcast from that one
         for line in ui.wrap("Sparrow: File > Load Transaction > From QR. It opens a NEW tab: same txid? "
                             "Broadcast from that tab, close the old one.", ui.font(14), width):
             d.text((x, y), line, fill=ui.TEXT, font=ui.font(14))

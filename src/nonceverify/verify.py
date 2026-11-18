@@ -770,7 +770,7 @@ def _path_notes(path, kind, ctx: WalletContext, single: bool) -> list:
 
 def _classify_output(finder, out, meta, ctx: WalletContext, index: int, net: str) -> OutputInfo:
     """
-    v7.6 (Ollen, 10 Nov 2026): is the change really this wallet's?
+    v7.6: is the change really this wallet's?
 
     Single-sig: the output pays a key DERIVED here from the seed at the path the PSBT
     declares (the key is recomputed, never trusted): the seed can spend it. Notes when

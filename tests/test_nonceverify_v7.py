@@ -1,6 +1,6 @@
 """
 v7 of the Anti-Klepto Check (8 Nov 2026, after the first tests on the device):
-- the signer is fixed as soon as "Scan PSBT" is pressed (Ollen's report: going back from
+- the signer is fixed as soon as "Scan PSBT" is pressed (field report: going back from
   the camera, the name could still be changed);
 - no green before the txid has been compared with Sparrow's (forgotten twice in the field);
 - "Check address": single-sig from the seed, multisig from the descriptor backup;
@@ -55,7 +55,7 @@ def signers_spy(monkeypatch):
 # ---------------------------------------------------------------------------------------
 def test_signer_fixed_as_soon_as_a_scan_starts(monkeypatch):
     """
-    Ollen's path on the device: name the signer, Scan PSBT, back from the camera before any
+    The path on the device: name the signer, Scan PSBT, back from the camera before any
     result, tap the signer button. In v5 the name changed (the lock came with the first
     verdict); in v7 it is fixed. "Change seed" starts a new choice.
     """

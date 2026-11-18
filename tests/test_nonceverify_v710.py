@@ -1,5 +1,5 @@
 """
-v7.10 (Ollen, 12 Nov 2026): five languages (EN default, IT, FR, ES, DE) and two hosts
+v7.10: five languages (EN default, IT, FR, ES, DE) and two hosts
 (Sparrow default, Nunchuk on the phone), chosen on the splash, kept only in RAM.
 """
 import builtins
