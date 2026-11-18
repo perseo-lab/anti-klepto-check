@@ -1,5 +1,5 @@
 """
-Hardware of the SeedSigner Max v5, reused from the image's own drivers (display, touch,
+Hardware of the Seed Max v5, reused from the image's own drivers (display, touch,
 camera stream): code that moves pixels and reads the panel, nothing that touches keys.
 
 `ImportGuard` keeps the signer's cryptography out of this process: embit, urtypes and

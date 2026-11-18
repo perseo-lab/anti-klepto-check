@@ -303,7 +303,7 @@ BY_ID = {
     "k298": "Semilla lista: ¿quién firmó?",
     "k299": "Semilla borrada",
     "k300": "SeedQR o palabras, y passphrase: solo RAM",
-    "k301": "SeedSigner Max · SD de verificación v{0}",
+    "k301": "Anti-Klepto Check · SD de verificación v{0}",
     "k302": "ENVÍA A",
     "k303": "Envía {0} a {1} otra(s) dirección(es)",
     "k304": "Mostrar",

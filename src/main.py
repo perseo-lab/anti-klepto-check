@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-SeedSigner Max, SD di verifica.
+Anti-Klepto Check: the verifier SD.
 
 This image does not run SeedSigner: it starts the nonce verifier (src/nonceverify),
 which checks the signatures made by another signer (or by the signing SD) and never

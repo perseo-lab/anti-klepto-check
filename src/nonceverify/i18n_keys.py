@@ -306,7 +306,7 @@ KEYS = {
     "k298": "Seed ready: who signed?",
     "k299": "Seed wiped",
     "k300": "SeedQR or words, and passphrase: RAM only",
-    "k301": "SeedSigner Max · verifier SD v{0}",
+    "k301": "Anti-Klepto Check · verifier SD v{0}",
     "k302": "SENDS TO",
     "k303": "Sends {0} to {1} other address(es)",
     "k304": "Show",

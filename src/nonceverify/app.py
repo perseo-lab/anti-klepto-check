@@ -167,7 +167,7 @@ def splash_background():
         d.text((fx + 19, fy - 5), name, fill=ui.TEXT, font=ui.fit_font(name, 13, room, bold=True, smallest=9),
                anchor="lm")
         d.text((fx + 19, fy + 8), sub, fill=ui.DIM, font=ui.fit_font(sub, 10, room, smallest=8), anchor="lm")
-    d.text((WIDTH / 2, 303), f"SeedSigner Max · verifier SD v{VERSION}", fill=ui.DIM,
+    d.text((WIDTH / 2, 303), f"Anti-Klepto Check · verifier SD v{VERSION}", fill=ui.DIM,
            font=ui.font(13, mono=True), anchor="mm")
     return image.convert("RGB")
 
