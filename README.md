@@ -51,6 +51,21 @@ The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction
 
 **With Nunchuk** (phone) as host there is no second copy of the transaction to load: the device shows the whole txid to find in Nunchuk before *Broadcast transaction*. There the witnesses are only as safe as Nunchuk is honest. The strongest check is still Sparrow + *Load Transaction*.
 
+## Screens
+
+Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screenshots.py), on the same 480×320 canvas, with the test data (the public *abandon … about* test seed).
+
+| | | |
+|---|---|---|
+| ![Splash: host and language, RAM only](docs/screenshots/01-splash.png) | ![Three steps](docs/screenshots/02-home.png) | ![Typing the seed words: only the letters that lead to a BIP-39 word](docs/screenshots/03-seed-words.png) |
+| Splash: host and language, RAM only | Three steps | Typing the seed words: only the letters that lead to a BIP-39 word |
+| ![The whole txid, to compare with Sparrow](docs/screenshots/04-txid.png) | ![Result: where the money goes, change proven yours](docs/screenshots/05-result.png) | ![Details](docs/screenshots/06-details.png) |
+| The whole txid, to compare with Sparrow | Result: where the money goes, change proven yours | Details |
+| ![Broadcast THIS: the checked transaction as a QR](docs/screenshots/07-broadcast.png) | !["?" help: what to do and why](docs/screenshots/08-help.png) | ![The same result in Italian](docs/screenshots/09-result-italian.png) |
+| Broadcast THIS: the checked transaction as a QR | "?" help: what to do and why | The same result in Italian |
+
+---
+
 ## Limits: read before relying on it
 
 - It only works with signers that use **deterministic RFC 6979 nonces**. Signers that use random nonces, or the interactive *anti-exfil* protocol (Jade, BitBox02), can't be checked this way. Despite the similar name, this tool is not that protocol: it is an after-the-fact check.
