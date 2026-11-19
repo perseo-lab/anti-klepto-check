@@ -7,7 +7,7 @@
 | | |
 |---|---|
 | **Latest** | v7.10, see [Releases](../../releases) |
-| **Runs on** | [Seed Max](https://github.com/perseo-lab/seed-max) hardware: Raspberry Pi Zero + 3.5" 480×320 touch display + camera. A port to standard SeedSigner hardware is planned. |
+| **Runs on** | **[Raspy Max v5](https://github.com/perseo-lab/raspy-max-hardware)**: Raspberry Pi Zero + 3.5" 480×320 touch display + battery + camera (parts list, case and build guide in its repository). A port to standard SeedSigner hardware is planned. |
 | **Signers it checks** | Coldcard Q, SeedSigner, Trezor (any signer with deterministic RFC 6979 nonces, see *Limits*) |
 | **Host** | **Sparrow** (desktop, the main host and the strongest check); Nunchuk (phone) as an alternative |
 | **Languages** | English, Italiano, Français, Español, Deutsch |
@@ -25,7 +25,7 @@ A hardware wallet can be compromised (malicious firmware, supply chain, a coordi
 
 ## What it checks
 
-Anti-Klepto Check boots from its own microSD on Seed Max hardware: a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
+Anti-Klepto Check boots from its own microSD on a [Raspy Max](https://github.com/perseo-lab/raspy-max-hardware): a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
 
 | Check | How |
 |---|---|
