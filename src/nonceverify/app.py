@@ -29,7 +29,7 @@ from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and old
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.12"
+VERSION = "7.13"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.

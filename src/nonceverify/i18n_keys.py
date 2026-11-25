@@ -436,4 +436,10 @@ KEYS = {
     "k427": 'push: instructions',
     "k428": 'the words appear at four or fewer',
     "k429": "Seed and passphrase have been removed from the app's memory.\n\nUnplug the power: that clears the RAM completely.",
+    # v7.13: classic SeedSigner
+    "k430": 'Who signed?',
+    "k431": 'change and fee',
+    "k432": '1. Load the seed: SeedQR or words, then the passphrase.\n2. Choose the device that signed; scan the signed PSBT from Sparrow.\n3. Compare the txid, read the result, choose Broadcast and load that QR in Sparrow.',
+    "k433": 'In Sparrow, the transaction tab shows the Transaction ID. Compare all four rows with this screen. Same: choose Same txid. Different: choose Different.',
+    "k434": "Every signature of this seed uses the nonce it had to use, sighash ALL, low S, and the txid is Sparrow's. Choose Broadcast.",
 }

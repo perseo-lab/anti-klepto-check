@@ -177,8 +177,8 @@ def load_seed_script(passphrase=PASSPHRASE, shots=True):
     return script
 
 
-SEEDSIGNER = [RIGHT, PRESS]                 # second signer, chosen
-TO_SCAN = [DOWN, DOWN, DOWN]                # from the second signer to "Scan PSBT"
+SEEDSIGNER = [DOWN, PRESS]                  # second signer chosen: the bar is next, on "Scan PSBT"
+TO_SCAN = []
 
 
 def run(script):
@@ -189,7 +189,7 @@ def run(script):
 
 
 def banner(shot):
-    return shot.getpixel((WIDTH // 2, ac.ResultScreen.BANNER[0] + 4))
+    return shot.getpixel((WIDTH // 2, ac.ResultScreen.BANNER[0] + 3))
 
 
 def test_full_flow_green_broadcast_details_finish():
@@ -198,7 +198,8 @@ def test_full_flow_green_broadcast_details_finish():
     script = load_seed_script() + SEEDSIGNER + [("shot", "08_signer_chosen")] + TO_SCAN + [PRESS, ("blank",)]
     script += ur_parts(psbt.serialize())
     script += [("shot", "09_txid"), PRESS, ("shot", "09b_txid_push_ignored"), RIGHT, ("shot", "10_txid_same"), PRESS]
-    script += [("shot", "11_result_green"), PRESS, ("shot", "12_broadcast_qr"), PRESS, ("shot", "13_broadcast_how"),
+    script += [("shot", "11_result_green"), DOWN, ("shot", "11b_result_change_fee"), UP,
+               PRESS, ("shot", "12_broadcast_qr"), PRESS, ("shot", "13_broadcast_how"),
                KEY3, LEFT, ("shot", "14_result_details_selected"), PRESS, ("shot", "15_details"), DOWN, DOWN,
                ("shot", "16_details_scrolled"), LEFT, PRESS, ("shot", "17_wipe"), LEFT, PRESS,
                ("shot", "18_seed_wiped"), PRESS, ("shot", "19_home_again")]
@@ -237,10 +238,13 @@ def test_wrong_txid_is_red_and_never_offers_broadcast():
 
 def test_signer_is_required_and_fixed():
     s = ac.SeedReadyScreen("73c5da0a", 12, False)
-    s.selected = 4                                   # Scan PSBT, no device chosen
-    assert s.on_event(Event(Event.PRESS)) == "__redraw__" and s.must_choose
+    s.focus = "bar"                                  # Scan PSBT, no device chosen
+    assert s.bar.value() == "scan_psbt"
+    assert s.on_event(Event(Event.PRESS)) == "__redraw__" and s.must_choose and s.focus == 0
     locked = ac.SeedReadyScreen("73c5da0a", 12, False, signer=flow.SIGNER__TREZOR, locked=True)
-    assert [i.enabled for i in locked.items[:3]] == [False, False, True]
+    assert [locked.enabled(i) for i in range(3)] == [False, False, True]
+    locked.on_event(Event(Event.UP))
+    assert locked.focus == 2, "the locked-out signers can't be reached"
     locked.render()
 
 
@@ -282,16 +286,44 @@ def test_word_entry_types_a_whole_seed():
 def test_review_shows_words_only_on_show_and_wrong_checksum_blocks():
     words = MNEMONIC.split()
     s = wc.SeedReviewScreen(words)
-    assert not s.revealed and s.items[s.selected].value == "ok"
-    s.selected = len(s.items) - 2                    # Show
+    assert not s.revealed and s.bar.value() == "ok"
+    s.on_event(Event(Event.LEFT))                    # Show
     s.on_event(Event(Event.PRESS))
-    assert s.revealed and len(s.word_items) == 12
+    assert s.revealed
+    s.on_event(Event(Event.UP))
+    assert s.focus == 11 and s.on_event(Event(Event.PRESS)) == ("edit", 11)
     bad = wc.SeedReviewScreen(words[:-1] + ["zoo"])
-    assert bad.revealed and not bad.buttons[2].enabled
-    bad.selected = len(bad.items) - 1
-    assert bad.on_event(Event(Event.PRESS)) is None, "Wrong never confirms"
+    assert bad.revealed and "ok" not in bad.bar.values, "no Confirm with a wrong checksum"
     for n in (12, 24):
         wc.SeedReviewScreen((words * 2)[:n]).render()
+
+
+def test_action_bar_and_screensaver(monkeypatch):
+    bar = u.ActionBar(["Details", "Broadcast", "Next PSBT"], ["details", "txqr", "again"], 1)
+    assert bar.value() == "txqr" and bar.move(1) and bar.value() == "again" and not bar.move(1)
+    # no key for SCREENSAVER_S: the screensaver; the key that wakes it does nothing else
+    clock = [0.0]
+    monkeypatch.setattr(u.time, "monotonic", lambda: clock[0])
+
+    class Hw:
+        shown = []
+        script = deque([[], [], [Event(Event.PRESS)], [Event(Event.PRESS)]])
+
+        def show(self, image):
+            self.shown.append(image)
+
+        def poll(self):
+            clock[0] += 70
+            return self.script.popleft() if self.script else []
+
+        def wait(self, s=0):
+            pass
+    hw = Hw()
+    screen = ac.HomeScreen()
+    assert screen.run(hw) == "scan_seed"
+    dark = [im for im in hw.shown if im.getpixel((2, 2)) == (0, 0, 0) and im.getpixel((120, 230)) == (0, 0, 0)]
+    assert dark, "the screensaver ran"
+    assert not ac.BroadcastScreen.screensaver, "never over the Broadcast QR"
 
 
 def test_keys_debounce_and_repeat():
@@ -330,10 +362,35 @@ def is_words(text: str) -> bool:
     return bool(words)
 
 
+def unusual_change_report():
+    import test_nonceverify_v79 as v79
+    psbt, keys, amounts = p2wpkh_psbt(1)
+    root = embit_root()
+    path = "m/84h/0h/5h/1/3"
+    pub = root.derive(path).key.get_public_key()
+    psbt = v79.with_output_script(psbt, 1, v79.script.p2wpkh(pub))
+    psbt.outputs[1].bip32_derivations = {pub: v79.DerivationPath(root.my_fingerprint, v79.bip32.parse_path(path))}
+    v79.libsecp_sign_psbt(psbt, keys, amounts)
+    report = v79.verify_psbt(v79.parse_psbt(psbt.serialize()), v79.master(), grinding="libsecp")
+    assert report.change_warning
+    return report
+
+
 def test_every_classic_screen_fits_and_is_translated(monkeypatch):
     """ Every screen, every language and host: 240x240, nothing off the screen, nothing left in English """
     from test_nonceverify_v79 import green_report
+    import test_nonceverify_v79 as v79
+    from dataclasses import replace
     report = green_report()
+    self_send = green_report()
+    self_send.outputs = [o for o in self_send.outputs if o.owner == flow.OWNER__OURS]
+    several = green_report()
+    pay = next(o for o in several.outputs if o.owner == flow.OWNER__EXTERNAL)
+    several.outputs = [pay, replace(pay, index=1, amount=1000)]
+    several.extra_fields = 2
+    unverified = v79.verify_psbt(v79.parse_psbt(v79._multisig_spend(xpubs=False).serialize()), v79.master(),
+                                 grinding="embit")
+    unusual = unusual_change_report()
     red = green_report()
     red.verdict = flow.VERDICT__FAIL
     red.tx_problem = "The txid is NOT the one in Sparrow: the transaction checked here is not the one Sparrow would " \
@@ -353,7 +410,14 @@ def test_every_classic_screen_fits_and_is_translated(monkeypatch):
         yield "ready", lambda: ac.SeedReadyScreen("73c5da0a", 24, True).render()
         yield "ready_locked", lambda: ac.SeedReadyScreen("73c5da0a", 12, False, flow.SIGNER__TREZOR, True).render()
         yield "txid", lambda: ac.TxidCheckScreen(report).render()
-        yield "result", lambda: ac.ResultScreen(report, "coldcard_q", True).render()
+        for name, rep in (("green", report), ("self", self_send), ("several", several), ("unverified", unverified),
+                          ("unusual", unusual)):
+            for page in (0, 1):
+                def summary(rep=rep, page=page):
+                    screen = ac.ResultScreen(rep, "coldcard_q", True)
+                    screen.page = page
+                    return screen.render()
+                yield f"result {name} {page}", summary
         yield "details", lambda: ac.ResultScreen(report, "coldcard_q", True, details=True).render()
         yield "red", lambda: ac.ResultScreen(red, "coldcard_q", False).render()
         yield "broadcast", lambda: ac.BroadcastScreen(report).render()

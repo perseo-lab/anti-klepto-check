@@ -92,8 +92,8 @@ class SplashScreen(u.Screen):
     HORIZON = 98
     EMBLEM_CY = 32
     EMBLEM_SIZE = 44
-    PANEL = (14, 106, 226, 168)
-    START = (66, 178, 174, 208)
+    PANEL = (10, 104, 230, 170)
+    START = (62, 178, 178, 208)
     sd_status = None
     _backgrounds = {}
 
@@ -115,18 +115,18 @@ class SplashScreen(u.Screen):
         d.rounded_rectangle(self.PANEL, radius=8, fill=u.PANEL, outline=(70, 96, 124), width=1)
         rows = (("Language", dict(i18n.LANGUAGES)[i18n.language()]), ("Host", i18n.host_name()))
         for i, (label, value) in enumerate(rows):
-            cy = y1 + 16 + i * 30
+            cy = y1 + 17 + i * 32
             selected = self.selected == i
             if selected:
-                d.rounded_rectangle((x1 + 3, cy - 12, x2 - 3, cy + 12), radius=5, fill=u.PANEL_HI, outline=u.ACCENT)
-            d.text((x1 + 10, cy), label, fill=u.DIM, font=u.fit_font(label, 13, 90, smallest=9), anchor="lm")
-            f = u.font(14, bold=True)
-            vx = x2 - 50
+                d.rounded_rectangle((x1 + 3, cy - 14, x2 - 3, cy + 14), radius=5, fill=u.PANEL_HI, outline=u.ACCENT)
+            d.text((x1 + 10, cy), label, fill=u.DIM, font=u.fit_font(label, u.SMALL + 1, 90, smallest=12), anchor="lm")
+            f = u.font(u.BODY + 1, bold=True)
+            vx = x2 - 56
             d.text((vx, cy), i18n.Translated(value), fill=u.ACCENT if selected else u.TEXT, font=f, anchor="mm")
             if selected:
                 for dx in (-1, 1):
-                    ax = vx + dx * 38
-                    d.polygon(((ax, cy - 5), (ax + dx * 6, cy), (ax, cy + 5)), fill=u.ACCENT)
+                    ax = vx + dx * 42
+                    d.polygon(((ax, cy - 6), (ax + dx * 7, cy), (ax, cy + 6)), fill=u.ACCENT)
         sx1, sy1, sx2, sy2 = self.START
         cy, radius = (sy1 + sy2) / 2, (sy2 - sy1) // 2
         if self.selected == 2:
@@ -138,20 +138,20 @@ class SplashScreen(u.Screen):
         else:
             d.rounded_rectangle(self.START, radius=radius, fill=u.PANEL, outline=u.ACCENT, width=2)
             fg = u.ACCENT
-        f = u.font(15, bold=True)
+        f = u.font(u.LARGE - 1, bold=True)
         text_w = u.text_width("START", f)
         tx = (sx1 + sx2) / 2 - (text_w + 14) / 2
         d.text((tx, cy + 1), "START", fill=fg, font=f, anchor="lm")
         ax = tx + text_w + 6
-        d.polygon(((ax, cy - 5), (ax + 8, cy), (ax, cy + 5)), fill=fg)
+        d.polygon(((ax, cy - 6), (ax + 9, cy), (ax, cy + 6)), fill=fg)
         if self.sd_status:
             writable = self.sd_status == storage.STATUS__WRITABLE
             text = "microSD WRITABLE: remount failed" if writable else f"microSD {self.sd_status}"
-            d.text((WIDTH / 2, 219), text, fill=u.YELLOW if writable else u.DIM,
-                   font=u.fit_font(text, 10, WIDTH - 12, bold=writable, mono=True, smallest=8), anchor="mm")
-        d.text((WIDTH / 2, 232), f"Anti-Klepto Check · verifier SD v{VERSION}", fill=u.DIM,
-               font=u.fit_font(f"Anti-Klepto Check · verifier SD v{VERSION}", 10, WIDTH - 12, mono=True, smallest=8),
-               anchor="mm")
+            d.rectangle((0, 212, WIDTH, HEIGHT), fill=u.BACKGROUND)
+            d.text((WIDTH / 2, 220), text, fill=u.YELLOW if writable else u.TEXT,
+                   font=u.fit_font(text, 13, WIDTH - 12, bold=True, smallest=11), anchor="mm")
+        version = f"Anti-Klepto Check · verifier SD v{VERSION}"
+        d.text((WIDTH / 2, 233), version, fill=u.DIM, font=u.fit_font(version, 12, WIDTH - 8, smallest=10), anchor="mm")
         return image
 
     def on_event(self, event):
@@ -182,18 +182,13 @@ class HomeScreen(u.Screen):
 
     def __init__(self):
         super().__init__()
-        self.items = u.column(["SeedQR", "Words"], 92, values=["scan_seed", "type_seed"], icons=["camera", "keyboard"],
-                              height=38, gap=8, size=16)
+        self.items = u.column(["SeedQR", "Words"], 108, values=["scan_seed", "type_seed"], icons=["camera", "keyboard"],
+                              height=44, gap=10, size=u.LARGE)
 
     def draw(self, d, image):
-        u.title(d, "Load the seed")
-        u.paragraph(d, "SeedQR or words, and passphrase: RAM only", u.TOP + 22, size=13, color=u.DIM, max_lines=3)
-        y = 190
-        for n, head in ((2, "Scan the signed PSBT"), (3, "Read the result")):
-            d.text((u.PAD + 6, y), str(n), fill=u.ACCENT, font=u.font(12, bold=True, mono=True), anchor="mm")
-            d.text((u.PAD + 16, y), head, fill=u.DIM, font=u.fit_font(head, 12, u.RIGHT - u.PAD - 16, smallest=9),
-                   anchor="lm")
-            y += 20
+        y = u.title(d, "Load the seed")
+        u.paragraph(d, "SeedQR or words, and passphrase: RAM only", y + 4, size=u.SMALL + 1, color=u.DIM,
+                    max_lines=3, line_gap=2)
 
 
 class PassphraseQuestionScreen(u.Screen):
@@ -203,19 +198,20 @@ class PassphraseQuestionScreen(u.Screen):
     def __init__(self, fingerprint: str, words: int):
         super().__init__()
         self.fingerprint, self.words = fingerprint, words
-        self.items = u.bottom_row(["None", "Passphrase"], values=["none", "enter"], icons=[None, "key"], primary_index=1)
+        self.items = u.bottom_row(["None", "Passphrase"], values=["none", "enter"], primary_index=1)
         self.selected = 1
 
     def draw(self, d, image):
-        u.icon(d, "ok_circle", (u.PAD + 8, u.TOP + 9), 15, u.GREEN)
-        text = f"Seed read: {self.words} words, checksum OK"
-        d.text((u.PAD + 20, u.TOP + 9), text, fill=u.TEXT, font=u.fit_font(text, 14, u.RIGHT - u.PAD - 20, bold=True,
-                                                                          smallest=9), anchor="lm")
-        u.panel(d, (u.PAD, u.TOP + 24, u.RIGHT, u.TOP + 82))
-        u.spaced(d, (u.PAD + 8, u.TOP + 32), "XFP WITHOUT PASSPHRASE", u.font(9, bold=True, mono=True), u.DIM, 1,
+        u.icon(d, "ok_circle", (u.PAD + 9, u.TOP + 10), 17, u.GREEN)
+        y = u.paragraph(d, f"Seed read: {self.words} words, checksum OK", u.TOP + 1, size=u.SMALL, x=u.PAD + 23,
+                        max_lines=2, line_gap=2, bold=True)
+        top = max(y, u.TOP + 22) + 2
+        u.panel(d, (u.PAD, top, u.RIGHT, top + 62))
+        u.spaced(d, (u.PAD + 8, top + 7), "XFP WITHOUT PASSPHRASE", u.font(12, bold=True, mono=True), u.DIM, 1,
                  anchor="lt")
-        d.text((u.PAD + 8, u.TOP + 46), self.fingerprint, fill=u.TEXT, font=u.font(28, bold=True, mono=True))
-        u.paragraph(d, "Does the wallet use a BIP39 passphrase?", u.TOP + 96, size=15, max_lines=3)
+        d.text((u.PAD + 8, top + 24), self.fingerprint, fill=u.TEXT, font=u.font(30, bold=True, mono=True))
+        u.paragraph(d, "Does the wallet use a BIP39 passphrase?", top + 70, size=u.BODY + 1, max_lines=3, bold=True,
+                    line_gap=2)
 
 
 class ConfirmPassphraseScreen(u.Screen):
@@ -226,37 +222,36 @@ class ConfirmPassphraseScreen(u.Screen):
         super().__init__()
         self.passphrase, self.fingerprint = passphrase, fingerprint
         self.revealed = False
-        self.make_items()
-        self.selected = 2
-
-    def make_items(self):
-        self.items = u.bottom_row(["Edit", "Hide" if self.revealed else "Show", "Confirm"], values=["edit", "reveal", "ok"],
-                                  primary_index=2, size=13)
+        self.bar = u.ActionBar(["Edit", "Show", "Confirm"], ["edit", "reveal", "ok"], 2)
+        self.selected = None
 
     def on_event(self, event):
-        value = super().on_event(event)
-        if value == "reveal":
-            self.revealed = not self.revealed
-            self.make_items()
+        if event.kind in (Event.LEFT, Event.RIGHT):
+            self.bar.move(-1 if event.kind == Event.LEFT else 1)
             return "__redraw__"
-        return value
+        if event.kind == Event.PRESS:
+            value = self.bar.value()
+            if value == "reveal":
+                self.revealed = not self.revealed
+                self.bar.labels[1] = "Hide" if self.revealed else "Show"
+                return "__redraw__"
+            return value
+        return None
 
     def draw(self, d, image):
-        u.title(d, "Check the passphrase", size=15)
-        u.panel(d, (u.PAD, u.TOP + 20, u.RIGHT, u.TOP + 92))
-        u.spaced(d, (u.PAD + 8, u.TOP + 26), "PASSPHRASE", u.font(9, bold=True, mono=True), u.DIM, 1, anchor="lt")
+        u.spaced(d, (u.PAD + 2, u.TOP + 2), "PASSPHRASE", u.font(12, bold=True, mono=True), u.DIM, 1, anchor="lt")
         info = f"{len(self.passphrase)} characters · spaces = ·"
-        d.text((u.RIGHT - 6, u.TOP + 26), info, fill=u.DIM, font=u.fit_font(info, 9, 120, mono=True, smallest=7),
-               anchor="rt")
-        f = u.font(14, mono=True)
+        d.text((u.RIGHT, u.TOP + 2), info, fill=u.DIM, font=u.fit_font(info, 13, 120, smallest=11), anchor="rt")
+        u.panel(d, (u.PAD, u.TOP + 18, u.RIGHT, u.TOP + 84))
+        f = u.font(u.BODY, mono=True)
         shown = flow.show_spaces(self.passphrase) if self.revealed else "•" * min(len(self.passphrase), 40)
         lines = u.wrap(i18n.Translated(shown) if self.passphrase else "(empty)", f, u.RIGHT - u.PAD - 16)
         if len(lines) > 3:
-            lines = lines[:2] + [i18n.Translated("… " + lines[-1][-20:])]
+            lines = lines[:2] + [i18n.Translated("… " + lines[-1][-14:])]
         for i, line in enumerate(lines):
-            d.text((u.PAD + 8, u.TOP + 40 + i * 16), line, fill=u.TEXT, font=f)
-        u.spaced(d, (u.PAD + 2, u.TOP + 100), "RESULTING XFP", u.font(9, bold=True, mono=True), u.DIM, 1, anchor="lt")
-        d.text((u.PAD, u.TOP + 112), self.fingerprint, fill=u.ACCENT, font=u.font(28, bold=True, mono=True))
+            d.text((u.PAD + 8, u.TOP + 24 + i * 19), line, fill=u.TEXT, font=f)
+        u.spaced(d, (u.PAD + 2, u.TOP + 92), "RESULTING XFP", u.font(12, bold=True, mono=True), u.DIM, 1, anchor="lt")
+        d.text((u.PAD, u.TOP + 106), self.fingerprint, fill=u.ACCENT, font=u.font(30, bold=True, mono=True))
         if not self.revealed:
             note, color = "hidden: Show to check it", u.DIM
         elif self.passphrase != self.passphrase.strip():
@@ -264,18 +259,21 @@ class ConfirmPassphraseScreen(u.Screen):
         else:
             note = None
         if note:
-            d.text((u.PAD, u.TOP + 156), note, fill=color, font=u.fit_font(note, 12, u.RIGHT - u.PAD, smallest=9),
+            d.text((u.PAD, u.TOP + 154), note, fill=color, font=u.fit_font(note, u.SMALL, u.RIGHT - u.PAD, smallest=12),
                    anchor="lm")
+        self.bar.draw(d)
 
 
 class SeedReadyScreen(u.Screen):
     """
     The XFP, the device that signed (no default: named after every seed load, fixed at
-    the first scan), then Scan PSBT or Change seed.
+    the first scan), then Scan PSBT or Change seed. The signers one under the other (UP/
+    DOWN), the actions in the bar (LEFT/RIGHT); choosing a signer moves to the bar.
     """
     help_topic = "signer"
     step = 1
-    SIGNERS_TOP = 148
+    LIST_TOP = 110
+    ROW_H = 30
 
     def __init__(self, fingerprint: str, words: int, has_passphrase: bool, signer: str = None, locked: bool = False):
         super().__init__()
@@ -284,61 +282,68 @@ class SeedReadyScreen(u.Screen):
         self.signer = signer if signer in flow.SIGNERS else None
         self.locked_hint = False
         self.must_choose = False
-        self.make_items()
-        self.selected = len(flow.SIGNER_ORDER) + 1 if self.signer else 0
+        self.bar = u.ActionBar(["Scan PSBT", "Change seed"], ["scan_psbt", "change_seed"], 0)
+        self.focus = "bar" if self.signer else 0            # a signer row (index) or "bar"
 
-    def make_items(self):
-        width = (u.RIGHT - u.PAD - 8) / 3
-        self.items = []
-        for i, signer in enumerate(flow.SIGNER_ORDER):
-            x1 = u.PAD + i * (width + 4)
-            item = u.Item((x1, self.SIGNERS_TOP, x1 + width, self.SIGNERS_TOP + 30), signer_name(signer),
-                          value=("signer", signer), size=12, primary=(signer == self.signer))
-            item.enabled = not (self.locked and signer != self.signer)
-            self.items.append(item)
-        self.items += u.bottom_row(["Change seed", "Scan PSBT"], values=["change_seed", "scan_psbt"],
-                                   icons=[None, "camera"], primary_index=1, size=13)
+    def enabled(self, i: int) -> bool:
+        return not (self.locked and flow.SIGNER_ORDER[i] != self.signer)
 
     def on_event(self, event):
-        value = super().on_event(event)
-        if isinstance(value, tuple) and value[0] == "signer":
+        if event.kind in (Event.UP, Event.DOWN):
+            rows = [i for i in range(len(flow.SIGNER_ORDER)) if self.enabled(i)] + ["bar"]
+            pos = rows.index(self.focus) if self.focus in rows else 0
+            self.focus = rows[max(0, min(len(rows) - 1, pos + (1 if event.kind == Event.DOWN else -1)))]
+            return "__redraw__"
+        if event.kind in (Event.LEFT, Event.RIGHT):
+            if self.focus != "bar":
+                self.focus = "bar"
+            else:
+                self.bar.move(-1 if event.kind == Event.LEFT else 1)
+            return "__redraw__"
+        if event.kind == Event.PRESS:
+            if self.focus == "bar":
+                value = self.bar.value()
+                if value == "scan_psbt" and self.signer is None:
+                    self.must_choose = True
+                    self.focus = 0
+                    return "__redraw__"
+                return value
+            signer = flow.SIGNER_ORDER[self.focus]
             if self.locked:
-                self.locked_hint = value[1] != self.signer
+                self.locked_hint = signer != self.signer
                 return "__redraw__"
-            self.signer = value[1]
+            self.signer = signer
             self.must_choose = False
-            keep = self.selected
-            self.make_items()
-            self.selected = keep
+            self.focus = "bar"
+            self.bar.index = 0
             return "__redraw__"
-        if value == "scan_psbt" and self.signer is None:
-            self.must_choose = True
-            self.selected = 0
-            return "__redraw__"
-        return value
+        return None
 
     def draw(self, d, image):
-        u.panel(d, (u.PAD, u.TOP, u.RIGHT, u.TOP + 58), outline=u.ACCENT)
-        u.icon(d, "fingerprint", (u.PAD + 20, u.TOP + 29), 24, u.ACCENT)
-        u.spaced(d, (u.PAD + 40, u.TOP + 6), "SEED READY · XFP", u.font(9, bold=True, mono=True), u.DIM, 1, anchor="lt")
-        d.text((u.PAD + 40, u.TOP + 16), self.fingerprint, fill=u.ACCENT, font=u.font(26, bold=True, mono=True))
+        u.panel(d, (u.PAD, u.TOP, u.RIGHT, u.TOP + 62), outline=u.ACCENT)
+        u.icon(d, "fingerprint", (u.PAD + 18, u.TOP + 30), 24, u.ACCENT)
+        u.spaced(d, (u.PAD + 36, u.TOP + 6), "SEED READY · XFP", u.font(12, bold=True, mono=True), u.DIM, 1, anchor="lt")
+        d.text((u.PAD + 36, u.TOP + 16), self.fingerprint, fill=u.ACCENT, font=u.font(30, bold=True, mono=True))
         words = f"{self.words} words · " + ("with passphrase" if self.has_passphrase else "no passphrase")
-        d.text((u.RIGHT - 6, u.TOP + 50), words, fill=u.DIM, font=u.fit_font(words, 10, 150, smallest=8), anchor="rm")
-        y = u.paragraph(d, "It must match the XFP on your wallet backup.", u.TOP + 62, size=11, max_lines=2,
-                        line_gap=1)
+        d.text((u.RIGHT - 6, u.TOP + 53), words, fill=u.DIM, font=u.fit_font(words, 13, 170, smallest=11), anchor="rm")
         if self.locked_hint:
             hint, color = "Locked for this session: to change it, Change seed", u.YELLOW
-        elif self.locked:
-            hint, color = "Who signed? (fixed for this session)", u.DIM
         elif self.must_choose:
             hint, color = "First choose the device you signed with:", u.YELLOW
         else:
-            hint, color = "Which device signed? (fixed once you press Scan PSBT)", u.DIM
-        u.paragraph(d, hint, y + 3, size=11, color=color, max_lines=2, line_gap=1)
-        for item in self.items[:3]:
-            if item.value[1] == self.signer:
-                x1, y1, x2, y2 = item.rect
-                u.check_mark(d, (x1 + x2) / 2, y1 - 9, 6, u.GREEN)       # the device chosen
+            hint, color = "Who signed?", u.TEXT
+        d.text((u.PAD, u.TOP + 70), hint, fill=color, font=u.fit_font(hint, u.BODY, u.RIGHT - u.PAD, bold=True,
+                                                                     smallest=11), anchor="lm")
+        for i, signer in enumerate(flow.SIGNER_ORDER):
+            y = self.LIST_TOP + i * self.ROW_H
+            item = u.Item((u.PAD, y, u.RIGHT, y + self.ROW_H - 4), signer_name(signer), primary=(signer == self.signer),
+                          size=u.BODY, align="left")
+            item.enabled = self.enabled(i)
+            item.draw(d, selected=(self.focus == i))
+            if signer == self.signer:
+                u.check_mark(d, u.RIGHT - 16, y + (self.ROW_H - 4) / 2, 7,
+                             u.BACKGROUND if self.focus == i else u.GREEN)
+        self.bar.draw(d, focused=(self.focus == "bar"))
 
 
 # ---------------------------------------------------------------------------------------
@@ -346,12 +351,12 @@ class SeedReadyScreen(u.Screen):
 # ---------------------------------------------------------------------------------------
 class ScanScreen:
     """
-    The camera picture on the whole screen, every frame to the QR decoder. A thin band on
-    top says what to scan; a progress bar at the bottom fills as the parts of an animated
-    QR come in. KEY1 help (the camera keeps running), KEY2 zoom, KEY3 or LEFT back.
+    The camera picture on the whole screen, every frame to the QR decoder. A band on top
+    says what to scan; a progress bar at the bottom fills as the parts of an animated QR
+    come in. KEY1 help (the camera keeps running), KEY2 zoom, KEY3 or LEFT back.
     """
     NO_FRAME_TIMEOUT_S = 8
-    BAND_H = 18
+    BAND_H = 24
 
     def __init__(self, heading: str, handle_payload, errors=(), help_topic: str = None):
         from nonceverify import seedqr, transport
@@ -368,27 +373,27 @@ class ScanScreen:
             if frame.size != (WIDTH, HEIGHT):
                 frame = frame.resize((WIDTH, HEIGHT))
             image.paste(frame, (0, 0))
-        L, R, T, B, k = 26, WIDTH - 26 - u.TAB_W, 30, HEIGHT - 22, 20
+        L, R, T, B, k = 26, WIDTH - 26 - u.TAB_W, 34, HEIGHT - 22, 20
         for (x, y, dx, dy) in ((L, T, 1, 1), (R, T, -1, 1), (L, B, 1, -1), (R, B, -1, -1)):
             d.line((x, y, x + dx * k, y), fill=u.ACCENT, width=3)
             d.line((x, y, x, y + dy * k), fill=u.ACCENT, width=3)
         d.rectangle((0, 0, WIDTH, self.BAND_H), fill=u.PANEL)
-        u.icon(d, "shield", (10, self.BAND_H / 2), 12, u.ACCENT)
+        u.icon(d, "shield", (11, self.BAND_H / 2), 14, u.ACCENT)
         heading = i18n.t(self.heading)
-        d.text((22, self.BAND_H / 2), i18n.Translated(heading), fill=u.ACCENT,
-               font=u.fit_font(i18n.Translated(heading), 12, WIDTH - 22 - 30, bold=True, smallest=8), anchor="lm")
+        d.text((24, self.BAND_H / 2), i18n.Translated(heading), fill=u.ACCENT,
+               font=u.fit_font(i18n.Translated(heading), u.BODY, WIDTH - 24 - 34, bold=True, smallest=12), anchor="lm")
         d.text((WIDTH - 6, self.BAND_H / 2), f"{zoom}x", fill=u.TEXT if zoom > 1 else u.DIM,
-               font=u.font(11, bold=True, mono=True), anchor="rm")
+               font=u.font(u.SMALL, bold=True, mono=True), anchor="rm")
         d.rectangle((0, HEIGHT - 6, WIDTH, HEIGHT), fill=u.PANEL)
         if self.progress > 0:
             d.rectangle((0, HEIGHT - 6, int(WIDTH * min(1.0, self.progress)), HEIGHT), fill=u.ACCENT)
         if self.status:
-            lines = u.wrap(self.status, u.font(12), WIDTH - 12 - u.TAB_W)[:4]
-            top = HEIGHT - 10 - 15 * len(lines)
+            lines = u.wrap(self.status, u.font(u.SMALL), WIDTH - 12 - u.TAB_W)[:4]
+            top = HEIGHT - 10 - 18 * len(lines)
             d.rectangle((0, top - 5, WIDTH, HEIGHT - 6), fill=u.BACKGROUND)
             d.line((0, top - 5, WIDTH, top - 5), fill=u.YELLOW, width=2)
             for i, line in enumerate(lines):
-                d.text((6, top + i * 15), line, fill=u.YELLOW, font=u.font(12))
+                d.text((6, top + i * 18), line, fill=u.YELLOW, font=u.font(u.SMALL))
         if self.help_topic:
             u.key_tab(d, Event.KEY1, "?", is_icon=False)
         u.key_tab(d, Event.KEY2, "search")
@@ -469,13 +474,13 @@ class WorkingScreen:
         image, d = u.new_canvas()
         u.header(d, step)
         u.emblem(d, WIDTH // 2, 74, 56)
-        d.text((WIDTH / 2, 124), headline, fill=u.TEXT, font=u.fit_font(headline, 15, WIDTH - 16, bold=True, smallest=9),
-               anchor="mm")
-        d.text((WIDTH / 2, 148), counter, fill=u.ACCENT, font=u.font(15, bold=True, mono=True), anchor="mm")
-        x1, x2, y = 30, WIDTH - 30, 166
-        d.rounded_rectangle((x1, y, x2, y + 6), radius=3, fill=u.PANEL)
-        d.rounded_rectangle((x1, y, x1 + max(6, (x2 - x1) * min(1.0, fraction)), y + 6), radius=3, fill=u.ACCENT)
-        u.paragraph(d, note, 184, size=11, color=u.DIM, x=10, width=WIDTH - 20, max_lines=3)
+        d.text((WIDTH / 2, 124), headline, fill=u.TEXT,
+               font=u.fit_font(headline, u.BODY + 1, WIDTH - 12, bold=True, smallest=12), anchor="mm")
+        d.text((WIDTH / 2, 150), counter, fill=u.ACCENT, font=u.font(u.BODY + 1, bold=True, mono=True), anchor="mm")
+        x1, x2, y = 26, WIDTH - 26, 168
+        d.rounded_rectangle((x1, y, x2, y + 7), radius=3, fill=u.PANEL)
+        d.rounded_rectangle((x1, y, x1 + max(7, (x2 - x1) * min(1.0, fraction)), y + 7), radius=3, fill=u.ACCENT)
+        u.paragraph(d, note, 186, size=u.SMALL, color=u.DIM, x=8, width=WIDTH - 16, max_lines=3, line_gap=2)
         self.hw.show(image)
 
     def scan(self, index: int, total: int):
@@ -494,7 +499,7 @@ class TxidCheckScreen(u.Screen):
     """
     v7 rule: green only after the txid is compared with the host's. On this hardware a
     push of the joystick is easy to give without reading: neither answer is selected
-    until the joystick moves.
+    until the joystick moves (LEFT: Different, RIGHT: Same txid).
     """
     help_topic = "txid"
     step = 2
@@ -507,22 +512,22 @@ class TxidCheckScreen(u.Screen):
         self.selected = None
 
     def draw(self, d, image):
-        u.icon(d, "ok_circle", (u.PAD + 8, u.TOP + 8), 15, u.GREEN)
-        head = "Nonces OK. Last step: compare the txid"
-        d.text((u.PAD + 20, u.TOP + 8), head, fill=u.TEXT, font=u.fit_font(head, 13, u.RIGHT - u.PAD - 20, bold=True,
-                                                                          smallest=8), anchor="lm")
-        sub = "Sparrow, transaction tab: is it the same, all of it?"
-        u.paragraph(d, sub, u.TOP + 20, size=11, color=u.DIM, max_lines=2, line_gap=0)
-        u.panel(d, (u.PAD, u.TOP + 48, u.RIGHT, u.TOP + 162), outline=u.ACCENT)
+        u.icon(d, "ok_circle", (u.PAD + 9, u.TOP + 10), 17, u.GREEN)
+        head = u.wrap("Nonces OK. Last step: compare the txid", u.font(u.SMALL + 1, bold=True), u.RIGHT - u.PAD - 24)
+        for i, line in enumerate(head[:2]):
+            d.text((u.PAD + 24, u.TOP + 10 + i * 18), line, fill=u.TEXT, font=u.font(u.SMALL + 1, bold=True),
+                   anchor="lm")
+        top = u.TOP + 32 if len(head) > 1 else u.TOP + 24
+        u.panel(d, (u.PAD, top + 4, u.RIGHT, top + 123), outline=u.ACCENT)
         rows = txid_rows(self.report.txid)
-        f = u.fit_font(max(rows, key=len), 22, u.RIGHT - u.PAD - 12, bold=True, mono=True)
+        f = u.fit_font(max(rows, key=len), 24, u.RIGHT - u.PAD - 10, bold=True, mono=True)
         for i, r in enumerate(rows):
-            d.text(((u.PAD + u.RIGHT) / 2, u.TOP + 63 + i * 28), r, fill=u.ACCENT if i % 2 == 0 else u.TEXT, font=f,
+            d.text(((u.PAD + u.RIGHT) / 2, top + 21 + i * 28), r, fill=u.ACCENT if i % 2 == 0 else u.TEXT, font=f,
                    anchor="mm")
         if self.selected is None:
-            d.text(((u.PAD + u.RIGHT) / 2, u.TOP + 172), "Move the joystick to answer", fill=u.DIM,
-                   font=u.fit_font("Move the joystick to answer", 11, u.RIGHT - u.PAD, smallest=8), anchor="mm")
-
+            hint = "Move the joystick to answer"
+            d.text(((u.PAD + u.RIGHT) / 2, top + 133), hint, fill=u.DIM,
+                   font=u.fit_font(hint, u.SMALL, u.RIGHT - u.PAD, smallest=12), anchor="mm")
 
     def on_event(self, event):
         # LEFT is the left answer, RIGHT the right one: no answer by a single careless push
@@ -534,22 +539,23 @@ class TxidCheckScreen(u.Screen):
         return super().on_event(event)
 
 
-def address_groups(text: str, per_line: int = 5) -> list:
+def address_groups(text: str, per_line: int = 4) -> list:
     groups = address.grouped(text).split(" ")
     return [" ".join(groups[i:i + per_line]) for i in range(0, len(groups), per_line)]
 
 
 class ResultScreen(u.Screen):
     """
-    The verdict. With the txid confirmed and clean nonces: one fixed page (as on the Seed
-    Max): where the money goes (amount and the WHOLE address), the change and whether it
-    is proven yours, the fee. Otherwise, and in Details: the reason first, then txid,
-    inputs, outputs, scrolled with UP/DOWN. The buttons are chosen with LEFT/RIGHT.
+    The verdict. With the txid confirmed and clean nonces: the summary, in two pages at a
+    readable size (UP/DOWN): where the money goes (amount and the WHOLE address), then the
+    change (proven yours or not) and the fee; the banner on both says the verdict.
+    Otherwise, and in Details: the reason first, then txid, inputs, outputs, scrolled with
+    UP/DOWN. The actions: LEFT/RIGHT in the bar, the center does it.
     """
     help_topic = "result"
     step = 2
-    BANNER = (u.HEADER_H + 2, u.HEADER_H + 34)
-    LIST_TOP = u.HEADER_H + 38
+    BANNER = (u.HEADER_H + 2, u.HEADER_H + 38)
+    LIST_TOP = u.HEADER_H + 42
 
     def __init__(self, report, signer: str = None, txid_confirmed: bool = False, details: bool = False):
         super().__init__()
@@ -557,15 +563,13 @@ class ResultScreen(u.Screen):
         self.summary = flow.shows_summary(report, txid_confirmed, details)
         self.can_export = flow.can_export(report, txid_confirmed)
         actions, primary = flow.result_actions(report, txid_confirmed, self.summary, details)
-        self.items = u.bottom_row([a[0] for a in actions], values=[a[1] for a in actions], primary_index=primary,
-                                  size=12, height=28)
-        self.selected = primary
-        self.list = None if self.summary else u.ScrollList(self.lines(), self.LIST_TOP, self.items[0].rect[1] - 4)
+        self.bar = u.ActionBar([a[0] for a in actions], [a[1] for a in actions], primary or 0)
+        self.selected = None
+        self.page = 0
+        self.list = None if self.summary else u.ScrollList(self.lines(), self.LIST_TOP, self.bar.rect[1] - 4)
 
     def banner(self):
-        if self.summary:
-            return colored(flow.summary_banner(self.report, self.signer))
-        if self.details and self.report.verdict == VERDICT__OK and self.txid_confirmed:
+        if self.summary or (self.details and self.report.verdict == VERDICT__OK and self.txid_confirmed):
             return colored(flow.summary_banner(self.report, self.signer))
         return colored(flow.result_banner(self.report, self.signer, self.txid_confirmed))
 
@@ -574,13 +578,14 @@ class ResultScreen(u.Screen):
         r = self.report
         lines = []
         width = u.RIGHT - u.PAD - 6
+        size, small = 15, u.SMALL
 
-        def add(text, color=u.TEXT, size=13, mono=False):
-            lines.append((text, color, size, mono))
+        def add(text, color=u.TEXT, sz=size, mono=False):
+            lines.append((text, color, sz, mono))
 
-        def para(text, color, size=13, indent=""):
-            for line in u.wrap(text, u.font(size), width - (8 if indent else 0)):
-                add(i18n.Translated(indent + line) if indent else line, color, size)
+        def para(text, color, sz=size, indent=""):
+            for line in u.wrap(text, u.font(sz), width - (10 if indent else 0)):
+                add(i18n.Translated(indent + line) if indent else line, color, sz)
 
         colors = {STATUS__OK: u.GREEN, STATUS__FAIL: u.RED, STATUS__UNSIGNED: u.YELLOW,
                   STATUS__UNVERIFIABLE: u.YELLOW, STATUS__FOREIGN: u.DIM}
@@ -594,132 +599,155 @@ class ResultScreen(u.Screen):
                     para(f"input #{i.index}: {i.message}", u.RED)
         if r.verdict == VERDICT__PARTIAL and r.unchecked_cosigners:
             para(f"Do not broadcast yet: {r.unchecked_cosigners} cosigner signature(s) not checked. Their nonce needs "
-                 "their seed: Change seed, load that seed, pick its device, scan this same PSBT.", u.YELLOW, 12)
+                 "their seed: Change seed, load that seed, pick its device, scan this same PSBT.", u.YELLOW, small)
         elif r.verdict == VERDICT__PARTIAL:
             para("Not complete: some input is not signed yet. When the transaction is fully signed, scan it again "
-                 "here: only then broadcast, with the Tx QR.", u.YELLOW, 12)
+                 "here: only then broadcast, with the Tx QR.", u.YELLOW, small)
         if r.extra_fields:
             para(f"The PSBT carries {r.extra_fields} field(s) the check doesn't need: data that could leave with the "
-                 "PSBT file. Broadcast with the Tx QR, don't pass the PSBT on.", u.YELLOW, 12)
+                 "PSBT file. Broadcast with the Tx QR, don't pass the PSBT on.", u.YELLOW, small)
         external, ours, unverified = flow.outputs_by_owner(r)
         para(f"Sends {btc(sum(o.amount for o in external))} to {len(external)} other address(es)", u.TEXT)
         for o in ours:
             para(f"Change {btc(o.amount)}: YOURS, {o.label}", u.GREEN)
             if o.note:
-                para(o.note, u.YELLOW, 12)
+                para(o.note, u.YELLOW, small)
         for o in unverified:
             para(f"Maybe NOT yours: {btc(o.amount)} (change not verified)", u.YELLOW)
-            para(o.note, u.YELLOW, 12)
+            para(o.note, u.YELLOW, small)
         if not ours and not unverified and r.verdict != VERDICT__FAIL:
-            add("No change back to this wallet", u.DIM, 12)
-        add(f"XFP {r.fingerprint} · {who}", u.DIM, 12, True)
-        add("txid" + (" (same as Sparrow's)" if self.txid_confirmed else ""), u.DIM, 12, True)
+            add("No change back to this wallet", u.DIM, small)
+        add(f"XFP {r.fingerprint}", u.DIM, small, True)
+        add(i18n.Translated(who), u.DIM, small, True)
+        add("txid" + (" (same as Sparrow's)" if self.txid_confirmed else ""), u.DIM, small, True)
         for row in txid_rows(r.txid):
-            add(f" {row}", u.TEXT, 15, True)
+            add(i18n.Translated(f" {row}"), u.TEXT, 17, True)
         all_tag = " · sighash ALL" if r.verdict == VERDICT__OK else ""
-        para(f"locktime {r.locktime} · version {r.version}{all_tag}", u.DIM, 11)
+        para(f"locktime {r.locktime} · version {r.version}{all_tag}", u.DIM, small)
         if r.tx_problem and r.verdict != VERDICT__FAIL:
             para(r.tx_problem, u.RED)
         if flow.seed_mismatch(r):
             para("No input of this PSBT belongs to this XFP: check seed and passphrase.", u.YELLOW)
         for i in r.inputs:
             marker = {STATUS__OK: "OK", STATUS__FAIL: "!!", STATUS__FOREIGN: "--"}.get(i.status, "??")
-            add(f"[{marker}] input #{i.index}  {btc(i.amount)}", colors[i.status], 13)
+            add(f"[{marker}] input #{i.index}  {btc(i.amount)}", colors[i.status], size)
             if i.path:
-                add(f"   {i.path}", u.DIM, 11, True)
-            para(i.message, colors[i.status], 12, indent="   ")
-        add("OUTPUTS", u.DIM, 11, True)
+                add(f"   {i.path}", u.DIM, small, True)
+            para(i.message, colors[i.status], small, indent="   ")
+        add("OUTPUTS", u.DIM, small, True)
         tags = {OWNER__OURS: ("YOURS", u.GREEN), OWNER__UNVERIFIED: ("not verified", u.YELLOW),
                 OWNER__FAKE: ("NOT YOURS", u.RED), OWNER__EXTERNAL: ("", u.TEXT)}
         for o in r.outputs:
             tag, color = tags[o.owner]
             para(f"#{o.index}  {btc(o.amount)}" + (f"  {tag}" if tag else "") + (f" · {o.label}" if o.label else ""),
-                 color, 13)
+                 color, size)
             if o.path:
-                add(f"   {o.path}", u.DIM, 11, True)
+                add(f"   {o.path}", u.DIM, small, True)
             for chunk in address_groups(o.address, 4):
-                add(i18n.Translated(f"   {chunk}"), u.DIM if o.owner == OWNER__EXTERNAL else color, 13, True)
-        add(f"Fee: {btc(r.fee)}", u.TEXT, 13)
+                add(i18n.Translated(f" {chunk}"), u.DIM if o.owner == OWNER__EXTERNAL else color, 16, True)
+        add(f"Fee: {btc(r.fee)}", u.TEXT, size)
         return lines
 
     def draw_banner(self, d):
         color, icon_name, headline, subline = self.banner()
         y1, y2 = self.BANNER
         d.rectangle((0, y1, WIDTH, y2), fill=color)
-        u.icon(d, icon_name, (u.PAD + 9, (y1 + y2) / 2), 17, u.BACKGROUND)
-        room = u.RIGHT - u.PAD - 22                   # clear of the key tabs on the right edge
-        d.text((u.PAD + 22, y1 + 10), headline, fill=u.BACKGROUND,
-               font=u.fit_font(headline, 15, room, bold=True, smallest=9), anchor="lm")
-        sub = u.wrap(subline, u.font(10, bold=True), room)
+        u.icon(d, icon_name, (u.PAD + 10, (y1 + y2) / 2), 19, u.BACKGROUND)
+        room = u.RIGHT - u.PAD - 24                   # clear of the key tabs on the right edge
+        d.text((u.PAD + 24, y1 + 11), headline, fill=u.BACKGROUND,
+               font=u.fit_font(headline, u.LARGE - 1, room, bold=True, smallest=12), anchor="lm")
+        sub = u.wrap(subline, u.font(13, bold=True), room)
         if len(sub) > 1:
             sub = [i18n.Translated(sub[0].rstrip(":,. ") + "…")]
-        d.text((u.PAD + 22, y1 + 24), sub[0], fill=u.BACKGROUND, font=u.font(10, bold=True), anchor="lm")
+        d.text((u.PAD + 24, y1 + 27), sub[0], fill=u.BACKGROUND, font=u.font(13, bold=True), anchor="lm")
+
+    def amount_row(self, d, y, label, label_color, sats, yours=False):
+        x1, x2 = u.PAD, u.RIGHT
+        f_label = u.font(u.SMALL, bold=True)
+        d.text((x1 + 6, y), label, fill=label_color, font=u.fit_font(label, u.SMALL, 96, bold=True, smallest=11),
+               anchor="lm")
+        if yours:
+            x = x1 + 6 + u.text_width(label, f_label) + 11
+            u.check_mark(d, x, y, 6, u.GREEN)
+        if sats is not None:
+            d.text((x2 - 6, y + 1), "BTC", fill=u.DIM, font=u.font(12, bold=True), anchor="rm")
+            d.text((x2 - 36, y), btc_amount(sats), fill=u.TEXT, font=u.font(17, bold=True, mono=True), anchor="rm")
+
+    def change_card(self):
+        """ (label, label color, sats, [(line, color)], outline, yours): the Seed Max card, its texts """
+        external, ours, unverified = flow.outputs_by_owner(self.report)
+        if unverified:
+            return ("CHANGE NOT VERIFIED", u.YELLOW, sum(x.amount for x in unverified),
+                    [("Not proven yours. Load the descriptor (Address > Multisig), scan again", u.YELLOW)], u.YELLOW,
+                    False)
+        if ours:
+            notes = "; ".join(x.note for x in ours if x.note)
+            if notes:
+                first = ours[0].label if len(ours) == 1 else ""
+                reason = i18n.Translated(f"{i18n.t(first)}: {i18n.t(notes)}" if first else i18n.t(notes))
+                return "CHANGE", u.GREEN, sum(x.amount for x in ours), [(reason, u.YELLOW)], u.YELLOW, True
+            if len(ours) == 1:
+                o = ours[0]
+                lines = [(i18n.Translated(f"{i18n.t(o.label)} · {o.path}"), u.TEXT), ("proven from your seed", u.DIM)]
+            else:
+                lines = [(f"{len(ours)} outputs, all yours: see Details", u.TEXT)]
+            return "CHANGE", u.GREEN, sum(x.amount for x in ours), lines, u.LINE, True
+        return "CHANGE", u.DIM, None, [("no change back to this wallet", u.DIM)], u.LINE, False
 
     def draw_summary(self, d):
         r = self.report
         external, ours, unverified = flow.outputs_by_owner(r)
         x1, x2 = u.PAD, u.RIGHT
-        f_amount, f_unit = u.font(17, bold=True, mono=True), u.font(10, bold=True)
-        # SENDS TO
-        top, bottom = 62, 140
-        u.panel(d, (x1, top, x2, bottom))
-        sats = sum(o.amount for o in external) if external else 0
-        d.text((x1 + 6, top + 10), "SENDS TO", fill=u.TEXT, font=u.fit_font("SENDS TO", 11, 70, bold=True, smallest=8),
-               anchor="lm")
-        d.text((x2 - 6, top + 11), "BTC", fill=u.DIM, font=f_unit, anchor="rm")
-        d.text((x2 - 32, top + 10), btc_amount(sats), fill=u.TEXT, font=f_amount, anchor="rm")
-        if len(external) == 1:
-            rows = [i18n.Translated(r) for r in address_groups(external[0].address, 5)]     # an address: never translated
-            f = u.fit_font(max(rows, key=len), 14, x2 - x1 - 12, mono=True, smallest=10)
-            for i, line in enumerate(rows[:4]):
-                d.text((x1 + 6, top + 24 + i * 13), i18n.Translated(line), fill=u.TEXT, font=f)
-        elif external:
-            u.paragraph(d, f"{len(external)} addresses: each one in Details", top + 26, size=12, x=x1 + 6,
-                        width=x2 - x1 - 12, max_lines=2)
-        else:
-            u.paragraph(d, "no other address: it all stays in this wallet", top + 26, size=12, color=u.DIM, x=x1 + 6,
-                        width=x2 - x1 - 12, max_lines=2)
-        # CHANGE
-        top, bottom = 144, 180
-        if unverified:
-            label, lcolor, sats, outline = "CHANGE NOT VERIFIED", u.YELLOW, sum(o.amount for o in unverified), u.YELLOW
-            note, ncolor = "Not proven yours. Load the descriptor (Address > Multisig), scan again", u.YELLOW
-        elif ours:
-            label, lcolor, sats = "CHANGE", u.GREEN, sum(o.amount for o in ours)
-            notes = "; ".join(o.note for o in ours if o.note)
-            if notes:
-                note, ncolor, outline = notes, u.YELLOW, u.YELLOW
+        top = self.BANNER[1] + 6
+        bottom = self.bar.rect[1] - 26
+        width = x2 - x1 - 12
+        if self.page == 0:
+            u.panel(d, (x1, top, x2, bottom))
+            self.amount_row(d, top + 13, "SENDS TO", u.TEXT, sum(o.amount for o in external) if external else 0)
+            y = top + 30
+            if len(external) == 1:
+                rows = [i18n.Translated(row) for row in address_groups(external[0].address, 4)]
+                f = u.fit_font(max(rows, key=len), 20, width, mono=True, smallest=15)
+                for row in rows[:4]:
+                    d.text((x1 + 6, y), row, fill=u.TEXT, font=f)
+                    y += 22
+            elif external:
+                u.paragraph(d, f"{len(external)} addresses: each one in Details", y, size=u.BODY, x=x1 + 6, width=width,
+                            max_lines=3)
             else:
-                o = ours[0]
-                note = f"{o.label} · proven from your seed" if len(ours) == 1 else f"{len(ours)} outputs, all yours: see Details"
-                ncolor, outline = u.DIM, u.LINE
+                # the Seed Max texts, line by line (translated one by one)
+                # the Seed Max texts (two keys, translated one by one), wrapped at a readable size
+                text = i18n.Translated(i18n.t("no other address: it all stays in") + " " + i18n.t("this wallet"))
+                u.paragraph(d, text, y - 4, size=u.BODY, color=u.DIM, x=x1 + 6, width=width, max_lines=4, line_gap=3)
+            hint = "change and fee"
         else:
-            label, lcolor, sats, outline = "CHANGE", u.DIM, None, u.LINE
-            note, ncolor = "no change back to this wallet", u.DIM
-        u.panel(d, (x1, top, x2, bottom), outline=outline, width=1 if outline == u.LINE else 2)
-        yours = lcolor == u.GREEN
-        both = i18n.Translated(i18n.t(label) + " xxxx " + i18n.t("YOURS")) if yours else label
-        f_label = u.fit_font(both, 11, 110, bold=True, smallest=7)
-        d.text((x1 + 6, top + 10), label, fill=lcolor, font=f_label, anchor="lm")
-        if yours:
-            x = x1 + 6 + u.text_width(label, f_label) + 10
-            u.check_mark(d, x, top + 10, 5, u.GREEN)
-            d.text((x + 8, top + 10), "YOURS", fill=u.GREEN, font=f_label, anchor="lm")
-        if sats is not None:
-            d.text((x2 - 6, top + 11), "BTC", fill=u.DIM, font=f_unit, anchor="rm")
-            d.text((x2 - 32, top + 10), btc_amount(sats), fill=u.TEXT, font=u.font(14, bold=True, mono=True),
-                   anchor="rm")
-        lines = u.wrap(note, u.font(10), x2 - x1 - 12)
-        if len(lines) > 1:
-            lines = [i18n.Translated(lines[0][:-1] + "…")]
-        d.text((x1 + 6, top + 26), lines[0], fill=ncolor, font=u.font(10), anchor="lm")
-        # Fee and the one note
-        d.text((x1 + 6, 190), "Fee", fill=u.DIM, font=u.font(12), anchor="lm")
-        d.text((x2 - 6, 190), btc(r.fee), fill=u.TEXT, font=u.font(12, mono=True), anchor="rm")
-        note, level = flow.summary_note(r)
-        if note:
-            d.text((WIDTH / 2, 202), note, fill=LEVEL_COLORS[level], font=u.fit_font(note, 10, WIDTH - 12, smallest=7),
-                   anchor="mm")
+            label, lcolor, sats, lines, outline, yours = self.change_card()
+            u.panel(d, (x1, top, x2, top + 84), outline=outline, width=1 if outline == u.LINE else 2)
+            self.amount_row(d, top + 13, label, lcolor, sats, yours=yours)
+            y = top + 28
+            for text, color in lines:
+                for line in u.wrap(text, u.font(u.SMALL + 1), width)[:3 if len(lines) == 1 else 2]:
+                    d.text((x1 + 6, y), line, fill=color, font=u.font(u.SMALL + 1))
+                    y += 18
+            y = top + 97
+            fee = btc(r.fee)
+            d.text((x1 + 2, y), "Fee", fill=u.DIM, font=u.fit_font("Fee", u.SMALL, x2 - x1 - 130, smallest=11),
+                   anchor="lm")
+            d.text((x2, y), fee, fill=u.TEXT, font=u.font(u.SMALL, mono=True), anchor="rm")
+            note, level = flow.summary_note(r)
+            if note:
+                u.paragraph(d, note, y + 9, size=u.SMALL, color=LEVEL_COLORS[level], max_lines=2, line_gap=1)
+            hint = None
+        # which page: two dots on the left edge, the upper one is the address
+        for i in range(2):
+            cy = top + 34 + i * 12
+            r_ = 2.5 if i == self.page else 1.8
+            d.ellipse((1.5 - r_ + 1, cy - r_, 1.5 + r_ + 1, cy + r_), fill=u.ACCENT if i == self.page else u.LINE)
+        if hint:
+            hy = self.bar.rect[1] - 12
+            d.polygon(((x1 + 2, hy - 4), (x1 + 12, hy - 4), (x1 + 7, hy + 3)), fill=u.ACCENT)
+            d.text((x1 + 18, hy), hint, fill=u.ACCENT, font=u.fit_font(hint, u.SMALL, x2 - x1 - 20, smallest=11),
+                   anchor="lm")
 
     def draw(self, d, image):
         self.draw_banner(d)
@@ -727,25 +755,33 @@ class ResultScreen(u.Screen):
             self.draw_summary(d)
         else:
             self.list.draw(d)
+        self.bar.draw(d)
 
     def on_event(self, event):
-        if event.kind in (Event.UP, Event.DOWN) and self.list is not None:
-            self.list.scroll(-45 if event.kind == Event.UP else 45)
-            return "__redraw__"
         if event.kind in (Event.UP, Event.DOWN):
-            return None
-        return super().on_event(event)
+            if self.list is not None:
+                self.list.scroll(-48 if event.kind == Event.UP else 48)
+            else:
+                self.page = 1 if event.kind == Event.DOWN else 0
+            return "__redraw__"
+        if event.kind in (Event.LEFT, Event.RIGHT):
+            self.bar.move(-1 if event.kind == Event.LEFT else 1)
+            return "__redraw__"
+        if event.kind == Event.PRESS:
+            return self.bar.value()
+        return None
 
 
 class BroadcastScreen(u.Screen):
     """
-    The transaction checked here, as an animated BBQr: the whole screen is the QR, for the
+    The transaction checked here, as an animated BBQr: the screen is the QR, for the
     webcam. The joystick center shows how to load it in Sparrow (and back to the QR).
     Nunchuk can't load a second copy: the whole txid, to find in Nunchuk (as on the Seed Max).
     """
     help_topic = "broadcast"
     back_value = "back"
-    QR_BOX = 216
+    screensaver = False
+    QR_BOX = 208
     FRAME_S = 0.6
 
     def __init__(self, report):
@@ -756,45 +792,56 @@ class BroadcastScreen(u.Screen):
         self.frames = [app.checked_qr(p, self.QR_BOX) for p in self.parts]
         self.ok = bool(self.frames) and all(f is not None for f in self.frames)
         self.index = 0
-        self.info = False
+        self.info = self.nunchuk or not self.ok
         self.selected = None
+        self.text = u.ScrollList(self.text_lines(), u.TOP + 28, HEIGHT - 4)
+
+    def text_lines(self):
+        lines = []
+        width = u.RIGHT - u.PAD - 6
+        if self.nunchuk:
+            from nonceverify.i18n_host import NUNCHUK_BROADCAST_TEXT
+            body = NUNCHUK_BROADCAST_TEXT
+        else:
+            body = "Sparrow: File > Load Transaction > From QR. It opens a NEW tab: same txid? " \
+                   "Broadcast from that tab, close the old one."
+            if not self.ok:
+                lines.append(("QR not available", u.RED, u.BODY, False))
+        for line in u.wrap(body, u.font(15), width):
+            lines.append((line, u.TEXT, 15, False))
+        lines.append(("txid", u.DIM, u.SMALL, True))
+        for row in txid_rows(self.report.txid):
+            lines.append((i18n.Translated(row), u.ACCENT, 18, True))
+        return lines
 
     def render(self):
         image, d = u.new_canvas()
-        if self.nunchuk or self.info or not self.ok:
+        if self.info:
             u.header(d, self.step)
-            self.draw_text(d)
+            if self.nunchuk:
+                from nonceverify.i18n_host import NUNCHUK_BROADCAST_TITLE
+                u.title(d, NUNCHUK_BROADCAST_TITLE, color=u.GREEN, size=u.LARGE - 1)
+            else:
+                u.title(d, "Broadcast THIS", color=u.GREEN, size=u.LARGE - 1)
+            self.text.draw(d)
         else:
             frame = self.frames[self.index]
             box = self.QR_BOX
             x, y = (WIDTH - u.TAB_W - box) // 2, 2
             d.rectangle((x, y, x + box, y + box), fill=(255, 255, 255))
             image.paste(frame, (x + (box - frame.size[0]) // 2, y + (box - frame.size[1]) // 2))
-            text = f"QR {self.index + 1} / {len(self.parts)} · BBQr"
-            d.text((x, 230), text, fill=u.DIM, font=u.font(10, mono=True), anchor="lm")
+            d.text((x, 225), f"QR {self.index + 1}/{len(self.parts)}", fill=u.TEXT, font=u.font(u.SMALL, mono=True),
+                   anchor="lm")
             hint = "push: instructions"
-            d.text((x + box, 230), hint, fill=u.ACCENT, font=u.fit_font(hint, 10, box - 100, smallest=7), anchor="rm")
+            d.text((x + box, 225), hint, fill=u.ACCENT, font=u.fit_font(hint, u.SMALL, box - 70, smallest=11),
+                   anchor="rm")
         self.draw_tabs(d)
         return image
 
-    def draw_text(self, d):
-        if self.nunchuk:
-            from nonceverify.i18n_host import NUNCHUK_BROADCAST_TEXT, NUNCHUK_BROADCAST_TITLE
-            u.title(d, NUNCHUK_BROADCAST_TITLE, color=u.GREEN, size=15)
-            y = u.paragraph(d, NUNCHUK_BROADCAST_TEXT, u.TOP + 20, size=11, max_lines=6, line_gap=1)
-        else:
-            u.title(d, "Broadcast THIS", color=u.GREEN, size=15)
-            if not self.ok:
-                d.text((u.PAD, u.TOP + 28), "QR not available", fill=u.RED, font=u.font(14, bold=True), anchor="lm")
-            y = u.paragraph(d, "Sparrow: File > Load Transaction > From QR. It opens a NEW tab: same txid? "
-                            "Broadcast from that tab, close the old one.", u.TOP + 40, size=12, max_lines=7, line_gap=1)
-        d.text((u.PAD, y + 4), "txid", fill=u.DIM, font=u.font(11, mono=True))
-        f = u.font(16, bold=True, mono=True)
-        for i, r in enumerate(txid_rows(self.report.txid)):
-            d.text(((u.PAD + u.RIGHT) / 2, y + 26 + i * 19), r, fill=u.ACCENT if i % 2 == 0 else u.TEXT, font=f,
-                   anchor="mm")
-
     def on_event(self, event):
+        if event.kind in (Event.UP, Event.DOWN) and self.info:
+            self.text.scroll(-40 if event.kind == Event.UP else 40)
+            return "__redraw__"
         if event.kind == Event.PRESS and not self.nunchuk and self.ok:
             self.info = not self.info
             return "__redraw__"

@@ -431,6 +431,12 @@ BY_ID = {
     "k425": 'Host',
     "k426": 'Bewege den Joystick, um zu antworten',
     "k427": 'drücken: Anleitung',
-    "k428": 'die Wörter erscheinen ab vier oder weniger',
+    "k428": 'Wörter ab vier oder weniger',
     "k429": 'Seed und Passphrase wurden aus dem Speicher der App entfernt.\n\nTrenne die Stromversorgung: so wird der RAM vollständig geleert.',
+    # v7.13: classic SeedSigner
+    "k430": 'Wer hat signiert?',
+    "k431": 'Wechselgeld und Gebühr',
+    "k432": '1. Seed laden: SeedQR oder Wörter, dann die Passphrase.\n2. Gerät wählen, das signiert hat; signierte PSBT aus Sparrow scannen.\n3. Txid vergleichen, Ergebnis lesen, Senden wählen und diesen QR in Sparrow laden.',
+    "k433": 'In Sparrow zeigt der Transaktions-Tab die Transaction ID. Vergleiche alle vier Zeilen mit diesem Bildschirm. Gleich: wähle Gleiche Txid. Anders: wähle Anders.',
+    "k434": 'Jede Signatur dieses Seeds nutzt den Nonce, den sie nutzen musste, Sighash ALL, niedriges S, und die Txid ist die von Sparrow. Wähle Senden.',
 }

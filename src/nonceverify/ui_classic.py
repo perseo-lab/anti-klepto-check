@@ -29,11 +29,19 @@ font, fit_font, wrap, text_width, icon, emblem, spaced = (ui.font, ui.fit_font, 
 draw_on = ui.draw_on
 
 PAD = 6
-HEADER_H = 22
+HEADER_H = 24
 TOP = HEADER_H + 4
 TAB_W = 14                            # the key tabs on the right edge
 RIGHT = WIDTH - TAB_W - 2             # content stops here, the tabs live beyond
-ITEM_H = 30
+ITEM_H = 34
+
+# v7.13: text sizes on the 1.3" panel (about 2.2 mm per 10 px): nothing under SMALL
+SMALL = 14                            # secondary text, labels
+BODY = 16                             # normal text
+LARGE = 19                            # titles
+
+# v7.13: after this long without a key, the screensaver (any key wakes it and does nothing else)
+SCREENSAVER_S = 120
 
 # Where the three keys sit beside the panel (y of their centers), as on the HAT
 KEY_Y = {Event.KEY1: 52, Event.KEY2: 120, Event.KEY3: 188}
@@ -49,12 +57,12 @@ def header(d, step: int = None, label: str = None):
     """ Top bar: the emblem, then the steps (SEED PSBT RESULT) or a label """
     d.rectangle((0, 0, WIDTH, HEADER_H), fill=PANEL)
     d.line((0, HEADER_H, WIDTH, HEADER_H), fill=LINE, width=1)
-    icon(d, "shield", (12, HEADER_H / 2), 14, ACCENT)
-    d.text((12, HEADER_H / 2 + 1), "k", fill=PANEL, font=font(10, bold=True, mono=True), anchor="mm")
+    icon(d, "shield", (12, HEADER_H / 2), 16, ACCENT)
+    d.text((12, HEADER_H / 2 + 1), "k", fill=PANEL, font=font(11, bold=True, mono=True), anchor="mm")
     left, right = 26, WIDTH - PAD
     if step is not None:
-        size = 11
-        while size > 8 and sum(text_width(n, font(size, bold=True, mono=True)) + 10 for n in STEPS) - 3 > right - left:
+        size = 13
+        while size > 9 and sum(text_width(n, font(size, bold=True, mono=True)) + 10 for n in STEPS) - 3 > right - left:
             size -= 1
         f = font(size, bold=True, mono=True)
         x = right
@@ -67,10 +75,10 @@ def header(d, step: int = None, label: str = None):
                    font=f, anchor="mm")
             x -= w + 3
     elif label:
-        d.text((right, HEADER_H / 2), label, fill=DIM, font=fit_font(label, 11, right - left, bold=True, mono=True,
-                                                                       smallest=8), anchor="rm")
+        d.text((right, HEADER_H / 2), label, fill=DIM, font=fit_font(label, 13, right - left, bold=True, mono=True,
+                                                                       smallest=10), anchor="rm")
     else:
-        spaced(d, (left, HEADER_H / 2), ui.APP_NAME, font(10, bold=True, mono=True), ACCENT, 1, anchor="lm")
+        spaced(d, (left, HEADER_H / 2), ui.APP_NAME, font(12, bold=True, mono=True), ACCENT, 1, anchor="lm")
 
 
 def key_tab(d, key: str, glyph: str, color=ACCENT, is_icon: bool = True):
@@ -80,10 +88,10 @@ def key_tab(d, key: str, glyph: str, color=ACCENT, is_icon: bool = True):
     if is_icon:
         icon(d, glyph, (WIDTH - TAB_W / 2 + 1, cy), 10, color)
     else:
-        d.text((WIDTH - TAB_W / 2 + 1, cy), glyph, fill=color, font=font(13, bold=True), anchor="mm")
+        d.text((WIDTH - TAB_W / 2 + 1, cy), glyph, fill=color, font=font(14, bold=True), anchor="mm")
 
 
-def paragraph(d, text: str, y: int, size: int = 14, color=TEXT, x: int = PAD, width: int = None,
+def paragraph(d, text: str, y: int, size: int = BODY, color=TEXT, x: int = PAD, width: int = None,
               max_lines: int = 12, line_gap: int = 3, bold: bool = False) -> int:
     width = width or (RIGHT - x)
     f = font(size, bold=bold)
@@ -96,8 +104,18 @@ def paragraph(d, text: str, y: int, size: int = 14, color=TEXT, x: int = PAD, wi
     return y
 
 
-def title(d, text: str, y: int = TOP + 9, color=TEXT, size: int = 17):
-    d.text((PAD, y), text, fill=color, font=fit_font(text, size, RIGHT - PAD, bold=True, smallest=11), anchor="lm")
+def title(d, text: str, y: int = TOP + 11, color=TEXT, size: int = LARGE) -> int:
+    """ One line if it fits (down to size - 3), else two lines at BODY. Returns the y below it """
+    room = RIGHT - PAD
+    f = fit_font(text, size, room, bold=True, smallest=size - 3)
+    if text_width(text, f) <= room:
+        d.text((PAD, y), text, fill=color, font=f, anchor="lm")
+        return y + size // 2 + 6
+    f = font(BODY, bold=True)
+    lines = wrap(text, f, room)[:2]
+    for i, line in enumerate(lines):
+        d.text((PAD, y + i * (BODY + 3)), line, fill=color, font=f, anchor="lm")
+    return y + (len(lines) - 1) * (BODY + 3) + BODY // 2 + 6
 
 
 def panel(d, rect, color=PANEL, outline=LINE, width: int = 1):
@@ -115,7 +133,7 @@ class Item:
     the screen expects) has a teal outline, `color` fills it (red: a destructive choice).
     Disabled: drawn dim, never chosen.
     """
-    def __init__(self, rect, label: str, value=None, primary: bool = False, color=None, size: int = 15,
+    def __init__(self, rect, label: str, value=None, primary: bool = False, color=None, size: int = BODY,
                  icon_name: str = None, enabled: bool = True, align: str = "center"):
         self.rect = tuple(int(v) for v in rect)
         self.label = label
@@ -136,7 +154,7 @@ class Item:
                             and outline is not None and not selected else 1)
         label = Translated(t(self.label))         # translated once, measured and drawn as it is
         room = x2 - x1 - 10 - ((self.size + 6) if self.icon_name else 0)
-        f = fit_font(label, self.size, room, bold=True, smallest=9)
+        f = fit_font(label, self.size, room, bold=True, smallest=12)
         cy = (y1 + y2) / 2
         w = (self.size + 6 if self.icon_name else 0) + ui._raw_width(label, f)
         x = x1 + 8 if self.align == "left" else (x1 + x2) / 2 - w / 2
@@ -147,7 +165,7 @@ class Item:
 
 
 def column(labels, top: int, values=None, icons=None, height: int = ITEM_H, gap: int = 5, primary_index=None,
-           x1: int = PAD, x2: int = RIGHT, size: int = 15, align: str = "center"):
+           x1: int = PAD, x2: int = RIGHT, size: int = BODY, align: str = "center"):
     """ Choices one under the other """
     out = []
     for i, label in enumerate(labels):
@@ -159,7 +177,7 @@ def column(labels, top: int, values=None, icons=None, height: int = ITEM_H, gap:
 
 
 def row(labels, y: int, values=None, icons=None, height: int = ITEM_H, gap: int = 5, primary_index=None,
-        x1: int = PAD, x2: int = RIGHT, size: int = 14):
+        x1: int = PAD, x2: int = RIGHT, size: int = BODY):
     """ Choices side by side, equal widths """
     n = len(labels)
     width = (x2 - x1 - gap * (n - 1)) / n
@@ -252,12 +270,15 @@ class Screen:
             return self.back_value
         return None
 
+    screensaver = True                # v7.13: off where the screen must stay (the Broadcast QR)
+
     def run(self, hw, timeout: float = None):
         hw.show(self.render())
-        started = time.monotonic()
+        started = last_key = time.monotonic()
         while True:
             housekeeping(hw)
             for event in hw.poll():
+                last_key = time.monotonic()
                 if event.kind == Event.KEY1 and self.help_topic:
                     open_help(hw, self.help_topic)          # then the same screen again
                     hw.show(self.render())
@@ -269,7 +290,103 @@ class Screen:
                     return result
             if timeout is not None and time.monotonic() - started > timeout:
                 return None
+            if self.screensaver and time.monotonic() - last_key > SCREENSAVER_S:
+                Screensaver().run(hw)
+                hw.show(self.render())
+                last_key = time.monotonic()
             hw.wait()
+
+
+class Screensaver:
+    """
+    v7.13: after SCREENSAVER_S without a key, the screen goes dark: only the emblem,
+    drifting, so what was shown (an XFP, a txid, an address) is not left on display. Any
+    key brings back the same screen; that key does nothing else.
+    """
+    SIZE = 44
+    FRAME_S = 0.08
+
+    def __init__(self):
+        self.x, self.y = WIDTH / 3, HEIGHT / 3
+        self.dx, self.dy = 1.6, 1.1
+
+    def frame(self):
+        image, d = new_canvas()
+        d.rectangle((0, 0, WIDTH, HEIGHT), fill=(0, 0, 0))
+        emblem(d, int(self.x), int(self.y), self.SIZE)
+        return image
+
+    def step(self):
+        half = self.SIZE / 2 + 2
+        self.x += self.dx
+        self.y += self.dy
+        if not half <= self.x <= WIDTH - half:
+            self.dx = -self.dx
+            self.x = min(max(self.x, half), WIDTH - half)
+        if not half <= self.y <= HEIGHT - half:
+            self.dy = -self.dy
+            self.y = min(max(self.y, half), HEIGHT - half)
+
+    def run(self, hw):
+        hw.show(self.frame())                     # dark at once, then the emblem drifts
+        shown = time.monotonic()
+        while True:
+            housekeeping(hw)
+            if hw.poll():
+                return
+            now = time.monotonic()
+            if now - shown >= self.FRAME_S:
+                hw.show(self.frame())
+                self.step()
+                shown = now
+            hw.wait()
+
+
+class ActionBar:
+    """
+    v7.13: three or more actions at a readable size on 216 pixels: one action at a time,
+    large, between arrows; dots say how many there are. LEFT/RIGHT change action, the
+    joystick center does it. Starts on the action the screen expects (`index`).
+    """
+    def __init__(self, labels, values=None, index: int = 0, colors=None, rect=None):
+        self.labels = list(labels)
+        self.values = list(values) if values is not None else list(labels)
+        self.colors = colors or {}
+        self.index = index or 0
+        self.rect = rect or (PAD, HEIGHT - ITEM_H - 4, RIGHT, HEIGHT - 4)
+
+    def move(self, step: int) -> bool:
+        new = max(0, min(len(self.labels) - 1, self.index + step))
+        moved = new != self.index
+        self.index = new
+        return moved
+
+    def value(self):
+        return self.values[self.index]
+
+    def draw(self, d, focused: bool = True):
+        x1, y1, x2, y2 = self.rect
+        color = self.colors.get(self.index, ACCENT)
+        if focused:
+            d.rounded_rectangle(self.rect, radius=6, fill=color)
+            fg = BACKGROUND
+        else:
+            d.rounded_rectangle(self.rect, radius=6, fill=PANEL, outline=color, width=2)
+            fg = TEXT
+        cy = (y1 + y2) / 2 - 2
+        label = Translated(t(self.labels[self.index]))
+        d.text(((x1 + x2) / 2, cy), label, fill=fg, font=fit_font(label, BODY + 1, x2 - x1 - 44, bold=True,
+                                                                  smallest=12), anchor="mm")
+        for i, dx in ((0, -1), (len(self.labels) - 1, 1)):
+            ax = (x1 + 12) if dx < 0 else (x2 - 12)
+            shade = fg if self.index != i else (ACCENT_DARK if focused else LINE)
+            d.polygon(((ax - 3 * dx, cy - 7), (ax + 4 * dx, cy), (ax - 3 * dx, cy + 7)), fill=shade)   # dim at the end
+        n = len(self.labels)
+        for i in range(n):
+            cx = (x1 + x2) / 2 + (i - (n - 1) / 2) * 9
+            r = 2.2 if i == self.index else 1.6
+            d.ellipse((cx - r, y2 - 6 - r, cx + r, y2 - 6 + r), fill=fg if i == self.index else
+                      (ACCENT_DARK if focused else DIM))
 
 
 class MessageScreen(Screen):
@@ -278,37 +395,47 @@ class MessageScreen(Screen):
         super().__init__()
         self.heading, self.body, self.heading_color, self.icon_name = heading, body, heading_color, icon_name
         self.step = step
-        self.list = None
         labels = list(buttons)
-        if len(labels) > 2 or any(text_width(b, font(14, bold=True)) > 100 for b in labels):
-            self.items = column(labels, HEIGHT - len(labels) * (ITEM_H + 4) - 2, values=values,
-                                primary_index=primary_index)
-        else:
+        primary = primary_index if primary_index is not None else 0
+        self.bar = None
+        fits = all(text_width(b, font(BODY, bold=True)) < (RIGHT - PAD) / len(labels) - 14 for b in labels)
+        if len(labels) == 1 or (len(labels) == 2 and fits):
             self.items = bottom_row(labels, values=values, primary_index=primary_index)
-        self.selected = primary_index if primary_index is not None else 0
-        top = TOP + 24
-        bottom = self.items[0].rect[1] - 4
-        lines = []
-        f = font(13)
-        for line in wrap(body, f, RIGHT - PAD - 4):
-            lines.append((line, TEXT, 13, False))
+            self.selected = primary
+        else:
+            # destructive choices (the red ones) are never the default
+            self.bar = ActionBar(labels, values, primary)
+            self.items = []
+            self.selected = None
+        top = TOP + 26
+        bottom = (self.bar.rect[1] if self.bar else self.items[0].rect[1]) - 4
+        lines = [(line, TEXT, 15, False) for line in wrap(body, font(15), RIGHT - PAD - 6)]
         self.list = ScrollList(lines, top, bottom)
 
     def draw(self, d, image):
         x = PAD
         if self.icon_name:
-            icon(d, self.icon_name, (PAD + 9, TOP + 9), 16, self.heading_color)
-            x = PAD + 22
-        d.text((x, TOP + 9), self.heading, fill=self.heading_color,
-               font=fit_font(self.heading, 16, RIGHT - x, bold=True, smallest=10), anchor="lm")
+            icon(d, self.icon_name, (PAD + 10, TOP + 10), 18, self.heading_color)
+            x = PAD + 25
+        d.text((x, TOP + 10), self.heading, fill=self.heading_color,
+               font=fit_font(self.heading, 18, RIGHT - x, bold=True, smallest=SMALL), anchor="lm")
         self.list.draw(d)
+        if self.bar:
+            self.bar.draw(d)
 
     def on_event(self, event):
-        # a long text scrolls with UP/DOWN; LEFT/RIGHT choose
-        if event.kind in (Event.UP, Event.DOWN) and self.list.max_offset() > 0 and len(self.items) <= 2 \
-                and self.items[0].rect[1] == self.items[-1].rect[1]:
-            self.list.scroll(-40 if event.kind == Event.UP else 40)
+        if event.kind in (Event.UP, Event.DOWN) and self.list.max_offset() > 0:
+            self.list.scroll(-45 if event.kind == Event.UP else 45)
             return "__redraw__"
+        if self.bar:
+            if event.kind in (Event.LEFT, Event.RIGHT):
+                self.bar.move(-1 if event.kind == Event.LEFT else 1)
+                return "__redraw__"
+            if event.kind == Event.PRESS:
+                return self.bar.value()
+            if event.kind == Event.KEY3 and self.back_value is not None:
+                return self.back_value
+            return None
         return super().on_event(event)
 
 
@@ -386,5 +513,5 @@ def key_cell(d, rect, label: str, selected: bool, enabled: bool = True, size: in
         d.rounded_rectangle(rect, radius=3, fill=BACKGROUND, outline=(24, 32, 42))
         fg = (52, 62, 74)
     room = rect[2] - rect[0] - 4
-    f = fit_font(label, size, room, bold=True, mono=mono, smallest=8)
+    f = fit_font(label, size, room, bold=True, mono=mono, smallest=11)
     d.text(((rect[0] + rect[2]) / 2, (rect[1] + rect[3]) / 2), label, fill=fg, font=f, anchor="mm")

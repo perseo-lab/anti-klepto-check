@@ -431,6 +431,12 @@ BY_ID = {
     "k425": 'Hôte',
     "k426": 'Bougez le joystick pour répondre',
     "k427": 'appuyez : instructions',
-    "k428": 'les mots apparaissent à quatre ou moins',
+    "k428": 'les mots à quatre ou moins',
     "k429": "Seed et passphrase ont été retirées de la mémoire de l'application.\n\nDébranchez l'alimentation : cela vide complètement la RAM.",
+    # v7.13: classic SeedSigner
+    "k430": 'Qui a signé ?',
+    "k431": 'monnaie et frais',
+    "k432": "1. Chargez la seed : SeedQR ou mots, puis la passphrase.\n2. Choisissez l'appareil qui a signé ; scannez la PSBT signée depuis Sparrow.\n3. Comparez le txid, lisez le résultat, choisissez Diffuser et chargez ce QR dans Sparrow.",
+    "k433": "Dans Sparrow, l'onglet de la transaction montre le Transaction ID. Comparez les quatre lignes avec cet écran. Identique : choisissez Même txid. Différent : choisissez Différent.",
+    "k434": "Chaque signature de cette seed utilise le nonce qu'elle devait utiliser, sighash ALL, S basse, et le txid est celui de Sparrow. Choisissez Diffuser.",
 }

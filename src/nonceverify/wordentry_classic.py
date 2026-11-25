@@ -21,13 +21,11 @@ class WordCountScreen(u.Screen):
 
     def __init__(self):
         super().__init__()
-        self.items = u.column(["12 words", "24 words"], 112, values=[12, 24], height=34)
+        self.items = u.column(["12 words", "24 words"], 108, values=[12, 24], height=44, gap=10, size=u.LARGE)
 
     def draw(self, d, image):
-        u.title(d, "Type the seed word by word")
-        u.paragraph(d, "How many words does your seed have?", u.TOP + 24, size=14, color=u.DIM)
-        u.paragraph(d, "They stay in RAM only; at the end you review them all, with the checksum.", 192,
-                    size=12, color=u.DIM, max_lines=3)
+        y = u.title(d, "Type the seed word by word")
+        u.paragraph(d, "How many words does your seed have?", y + 4, size=u.BODY, color=u.DIM, max_lines=2)
 
 
 class WordEntryScreen(u.Screen):
@@ -37,12 +35,12 @@ class WordEntryScreen(u.Screen):
     ROWS = ("abcdefg", "hijklmn", "opqrstu", "vwxyz")
     COLS = 7
     KEYS_TOP = 76
-    KEY_H = 25
+    KEY_H = 24
     KEY_GAP = 3
-    CAND_TOP = 190
+    CAND_TOP = 186
     CAND_SLOTS = 4
     LABEL_CY = u.TOP + 9
-    FIELD = (u.PAD, u.TOP + 22, u.RIGHT, u.TOP + 44)
+    FIELD = (u.PAD, u.TOP + 20, u.RIGHT, u.TOP + 44)
     key2_glyph = ("erase", True)
 
     def __init__(self, index: int, count: int, text: str = "", back_label: str = "Back"):
@@ -70,8 +68,8 @@ class WordEntryScreen(u.Screen):
         width = (u.RIGHT - u.PAD - 4) / 2
         col, row = slot % 2, slot // 2
         x = u.PAD + col * (width + 4)
-        y = cls.CAND_TOP + row * 24
-        return (int(x), y, int(x + width), y + 21)
+        y = cls.CAND_TOP + row * 26
+        return (int(x), y, int(x + width), y + 23)
 
     def candidates(self) -> list:
         found = matches(self.text)
@@ -107,30 +105,31 @@ class WordEntryScreen(u.Screen):
         found = matches(self.text)
         d.rounded_rectangle(self.FIELD, radius=4, fill=u.PANEL, outline=u.ACCENT, width=1)
         cy = (self.FIELD[1] + self.FIELD[3]) / 2
-        d.text((u.PAD + 6, cy), Translated(self.text + "_"), fill=u.TEXT, font=u.font(16, bold=True, mono=True),
+        d.text((u.PAD + 6, cy), Translated(self.text + "_"), fill=u.TEXT, font=u.font(19, bold=True, mono=True),
                anchor="lm")
         if self.text and len(found) > self.CAND_SLOTS:
-            d.text((self.FIELD[2] - 5, cy), f"{len(found)} words", fill=u.DIM, font=u.font(11, mono=True),
+            d.text((self.FIELD[2] - 5, cy), f"{len(found)} words", fill=u.DIM, font=u.font(u.SMALL),
                    anchor="rm")
         allowed = next_letters(self.text)
         for (r, c), (kind, value) in self.cells.items():
             if kind != "letter":
                 continue
-            u.key_cell(d, self.key_rect(value), value, (r, c) == self.cursor, value in allowed, size=15)
+            u.key_cell(d, self.key_rect(value), value, (r, c) == self.cursor, value in allowed, size=18)
         cands = self.candidates()
         for slot, word in enumerate(cands):
             r = len(self.ROWS) + slot // 2
-            u.Item(self.candidate_rect(slot), Translated(word), primary=len(cands) == 1, size=13).draw(
+            u.Item(self.candidate_rect(slot), Translated(word), primary=len(cands) == 1, size=u.BODY).draw(
                 d, selected=(r, slot % 2) == self.cursor)
         if not self.text:
-            d.text(((u.PAD + u.RIGHT) / 2, self.CAND_TOP + 20), "type the first letters", fill=u.DIM,
-                   font=u.font(12), anchor="mm")
+            d.text(((u.PAD + u.RIGHT) / 2, self.CAND_TOP + 24), "type the first letters", fill=u.DIM,
+                   font=u.fit_font("type the first letters", u.BODY, u.RIGHT - u.PAD, smallest=12), anchor="mm")
         elif not cands:
-            d.text(((u.PAD + u.RIGHT) / 2, self.CAND_TOP + 20), "the words appear at four or fewer", fill=u.DIM,
-                   font=u.fit_font("the words appear at four or fewer", 12, u.RIGHT - u.PAD, smallest=9), anchor="mm")
+            d.text(((u.PAD + u.RIGHT) / 2, self.CAND_TOP + 24), "the words appear at four or fewer", fill=u.DIM,
+                   font=u.fit_font("the words appear at four or fewer", u.SMALL + 1, u.RIGHT - u.PAD, smallest=12),
+                   anchor="mm")
 
     def bar_segments(self):
-        x1, x2 = 132, u.RIGHT
+        x1, x2 = 140, u.RIGHT
         gap = 2 if self.count <= 12 else 1
         width = (x2 - x1 - gap * (self.count - 1)) / self.count
         y = self.LABEL_CY - 3
@@ -140,7 +139,7 @@ class WordEntryScreen(u.Screen):
     def draw_position(self, d):
         """ "WORD 5 of 12", the number large, and one bar segment per word """
         x, cy = u.PAD, self.LABEL_CY
-        f_label, f_num, f_of = u.font(10, bold=True, mono=True), u.font(17, bold=True), u.font(12, bold=True)
+        f_label, f_num, f_of = u.font(13, bold=True, mono=True), u.font(21, bold=True), u.font(u.SMALL + 1, bold=True)
         u.spaced(d, (x, cy + 1), "WORD", f_label, u.DIM, 1, anchor="lm")
         x += sum(u.text_width(Translated(c), f_label) for c in u.t("WORD")) + 3 + 5
         number = str(self.index + 1)
@@ -179,12 +178,13 @@ class SeedReviewScreen(u.Screen):
     """
     All the words, numbered, with the checksum. Returns "ok" (valid checksum only),
     ("edit", index) or "cancel". Twelve words per page; 24 words: the page follows the
-    selected word.
+    selected word. Shown words are chosen with UP/DOWN (to re-type one); the actions are
+    in the bar (LEFT/RIGHT).
     """
     step = 0
     help_topic = "seed"
     back_value = "cancel"
-    GRID_TOP = u.TOP + 32
+    GRID_TOP = u.TOP + 35
     ROW_H = 22
     PER_PAGE = 12
 
@@ -194,20 +194,13 @@ class SeedReviewScreen(u.Screen):
         self.valid = seedqr.mnemonic_is_valid(" ".join(words))
         self.revealed = not self.valid            # wrong checksum: shown, the wrong word must be found
         self.page = 0
-        self.make_items()
+        self.focus = "bar"
+        self.make_bar()
 
-    def make_items(self):
-        labels = ["Cancel", "Hide" if self.revealed else "Show", "Confirm" if self.valid else "Wrong"]
-        self.buttons = u.bottom_row(labels, values=["cancel", "reveal", "ok"], primary_index=2 if self.valid else None,
-                                    size=13)
-        self.buttons[2].enabled = self.valid
-        if not self.valid:
-            self.buttons[2].color = u.RED
-        # the words are choices only when shown (to re-type the wrong one)
-        self.word_items = [u.Item(self.cell(i), "", value=("edit", i)) for i in range(len(self.words))] \
-            if self.revealed else []
-        self.items = self.word_items + self.buttons
-        self.selected = len(self.word_items) + (2 if self.valid else 0)
+    def make_bar(self):
+        labels = ["Cancel", "Hide" if self.revealed else "Show"] + (["Confirm"] if self.valid else [])
+        self.bar = u.ActionBar(labels, ["cancel", "reveal", "ok"][:len(labels)], len(labels) - 1,
+                               colors={} if self.valid else {})
 
     def cell(self, i: int):
         j = i % self.PER_PAGE
@@ -217,53 +210,63 @@ class SeedReviewScreen(u.Screen):
         y = self.GRID_TOP + row * self.ROW_H
         return (int(x), y, int(x + width), y + self.ROW_H - 3)
 
-    def render(self):
-        if self.selected is not None and self.selected < len(self.word_items):
-            self.page = self.selected // self.PER_PAGE
-        image, d = u.new_canvas()
-        u.header(d, self.step, self.header_label)
-        self.draw(d, image)
-        for i, item in enumerate(self.buttons):
-            item.draw(d, selected=(len(self.word_items) + i == self.selected))
-        self.draw_tabs(d)
-        return image
-
     def draw(self, d, image):
         if self.valid:
-            u.icon(d, "ok_circle", (u.PAD + 7, u.TOP + 7), 13, u.GREEN)
+            u.icon(d, "ok_circle", (u.PAD + 8, u.TOP + 9), 15, u.GREEN)
             text, color = ("Checksum OK: compare the words with your backup" if self.revealed else
                            "Checksum OK · words hidden: Show to compare"), u.TEXT
         else:
-            u.icon(d, "x_circle", (u.PAD + 7, u.TOP + 7), 13, u.RED)
+            u.icon(d, "x_circle", (u.PAD + 8, u.TOP + 9), 15, u.RED)
             text, color = "Checksum wrong: choose the wrong word", u.RED      # v7.12: no "tap" here
-        u.paragraph(d, text, u.TOP, size=12, color=color, x=u.PAD + 18, max_lines=2, line_gap=1, bold=True)
-        f_num, f_word = u.font(11, mono=True), u.font(14, bold=True)
+        u.paragraph(d, text, u.TOP, size=u.SMALL, color=color, x=u.PAD + 20, max_lines=2, line_gap=1, bold=True)
+        f_num, f_word = u.font(13, mono=True), u.font(u.BODY, bold=True)
+        if isinstance(self.focus, int):
+            self.page = self.focus // self.PER_PAGE
         start = self.page * self.PER_PAGE
         for i in range(start, min(len(self.words), start + self.PER_PAGE)):
             rect = self.cell(i)
-            selected = i == self.selected
+            selected = i == self.focus
             d.rounded_rectangle(rect, radius=3, fill=u.ACCENT if selected else u.PANEL,
                                 outline=None if selected else u.LINE)
             cy = (rect[1] + rect[3]) / 2
             fg = u.BACKGROUND if selected else u.TEXT
-            d.text((rect[0] + 20, cy), f"{i + 1}", fill=u.BACKGROUND if selected else u.DIM, font=f_num, anchor="rm")
+            d.text((rect[0] + 21, cy), f"{i + 1}", fill=u.BACKGROUND if selected else u.DIM, font=f_num, anchor="rm")
             word = Translated(self.words[i]) if self.revealed else "•" * 4       # BIP39 words, never translated
-            d.text((rect[0] + 25, cy), word, fill=fg if self.revealed else u.DIM, font=f_word, anchor="lm")
+            d.text((rect[0] + 26, cy), word, fill=fg if self.revealed else u.DIM, font=f_word, anchor="lm")
         if len(self.words) > self.PER_PAGE:
-            d.text((u.RIGHT, self.GRID_TOP + 6 * self.ROW_H + 1), f"{self.page + 1}/{len(self.words) // 12}",
-                   fill=u.DIM, font=u.font(10, mono=True), anchor="rt")
+            d.text((u.RIGHT, self.bar.rect[1] - 3), f"{self.page + 1}/{len(self.words) // 12}", fill=u.DIM,
+                   font=u.font(13, mono=True), anchor="rb")
+        self.bar.draw(d, focused=self.focus == "bar")
 
     def on_event(self, event):
-        if event.kind == Event.PRESS and self.selected is not None and self.items[self.selected].value == "reveal":
-            self.revealed = not self.revealed
-            self.make_items()
-            self.selected = len(self.word_items) + 1
+        if event.kind in (Event.UP, Event.DOWN):
+            step = 1 if event.kind == Event.DOWN else -1
+            if self.revealed:
+                rows = list(range(len(self.words))) + ["bar"]
+                pos = rows.index(self.focus)
+                self.focus = rows[max(0, min(len(rows) - 1, pos + step))]
+            elif len(self.words) > self.PER_PAGE:
+                self.page = (self.page + step) % (len(self.words) // self.PER_PAGE)
             return "__redraw__"
-        if event.kind in (Event.UP, Event.DOWN) and not self.word_items and len(self.words) > self.PER_PAGE:
-            pages = len(self.words) // self.PER_PAGE
-            self.page = (self.page + (1 if event.kind == Event.DOWN else -1)) % pages
+        if event.kind in (Event.LEFT, Event.RIGHT):
+            if self.focus != "bar":
+                self.focus = "bar"
+            else:
+                self.bar.move(-1 if event.kind == Event.LEFT else 1)
             return "__redraw__"
-        return super().on_event(event)
+        if event.kind == Event.PRESS:
+            if isinstance(self.focus, int):
+                return ("edit", self.focus)
+            value = self.bar.value()
+            if value == "reveal":
+                self.revealed = not self.revealed
+                self.make_bar()
+                self.bar.index = 1
+                return "__redraw__"
+            return value
+        if event.kind == Event.KEY3:
+            return self.back_value
+        return None
 
 
 def confirm_discard(hw, typed: int) -> bool:
@@ -291,10 +294,10 @@ class KeyboardScreen(u.Screen):
         "123": ["1234567890", "!@#$%^&*()", "-_=+[]{};:"],
         "#+=": ["'\",.<>/?\\|", "`~"],
     }
-    KEYS_TOP = 84
-    KEY_H = 26
+    KEYS_TOP = 86
+    KEY_H = 29
     GAP = 2
-    FIELD_FONT = 14
+    FIELD_FONT = 17
     step = 0
     help_topic = "seed"
     key2_glyph = ("erase", True)
@@ -322,15 +325,15 @@ class KeyboardScreen(u.Screen):
             rows.append(rects)
         shift = "abc" if self.page == "ABC" else ("ABC" if self.page == "abc" else "abc")
         numbers = "#+=" if self.page == "123" else "123"
-        controls = [(38, "aA" if self.page in ("abc", "ABC") else "abc", ("page", shift)),
-                    (38, numbers, ("page", numbers)),
-                    (74, "space", ("char", " ")),
+        controls = [(40, "aA" if self.page in ("abc", "ABC") else "abc", ("page", shift)),
+                    (40, numbers, ("page", numbers)),
+                    (66, "space", ("char", " ")),
                     (0, "Done", ("done", None))]
-        y = self.KEYS_TOP + 4 * (self.KEY_H + self.GAP) + 4
+        y = self.KEYS_TOP + 3 * (self.KEY_H + self.GAP) + 4
         x, rects, r = u.PAD, [], len(rows)
         for c, (w, label, value) in enumerate(controls):
             w = w or (u.RIGHT - x)
-            rects.append((x, y, x + w, y + self.KEY_H + 2))
+            rects.append((x, y, x + w, y + self.KEY_H + 4))
             self.cells[(r, c)] = (value, label)
             x += w + 3
         rows.append(rects)
@@ -353,21 +356,21 @@ class KeyboardScreen(u.Screen):
         return [Translated(line) for line in lines]
 
     def draw(self, d, image):
-        u.spaced(d, (u.PAD, u.TOP + 1), "PASSPHRASE", u.font(10, bold=True, mono=True), u.DIM, 1, anchor="lt")
-        d.text((u.RIGHT, u.TOP + 1), f"{len(self.text)} characters · space = ·", fill=u.DIM,
-               font=u.fit_font(f"{len(self.text)} characters · space = ·", 10, 120, mono=True, smallest=8), anchor="rt")
-        d.rounded_rectangle((u.PAD, u.TOP + 15, u.RIGHT, self.KEYS_TOP - 6), radius=4, fill=u.PANEL, outline=u.ACCENT)
+        u.spaced(d, (u.PAD, u.TOP + 1), "PASSPHRASE", u.font(12, bold=True, mono=True), u.DIM, 1, anchor="lt")
+        info = f"{len(self.text)} characters · space = ·"
+        d.text((u.RIGHT, u.TOP + 1), info, fill=u.DIM, font=u.fit_font(info, 13, 116, smallest=11), anchor="rt")
+        d.rounded_rectangle((u.PAD, u.TOP + 17, u.RIGHT, self.KEYS_TOP - 5), radius=4, fill=u.PANEL, outline=u.ACCENT)
         for i, line in enumerate(self.field_lines()):
-            d.text((u.PAD + 6, u.TOP + 27 + i * 18), line, fill=u.TEXT, font=u.font(self.FIELD_FONT, mono=True),
+            d.text((u.PAD + 6, u.TOP + 29 + i * 19), line, fill=u.TEXT, font=u.font(self.FIELD_FONT, mono=True),
                    anchor="lm")
         for (r, c), (value, label) in self.cells.items():
             rect = self.rows[r][c]
             selected = (r, c) == self.grid.cursor
             if value[0] == "done":
-                u.Item(rect, label, primary=True, size=13).draw(d, selected=selected)
+                u.Item(rect, label, primary=True, size=u.BODY).draw(d, selected=selected)
             else:
                 u.key_cell(d, rect, Translated(label) if value[0] == "char" else label, selected,
-                           size=14 if value[0] == "char" else 11, mono=value[0] == "char")
+                           size=18 if value[0] == "char" else 13, mono=value[0] == "char")
 
     def on_key2(self):
         self.text = self.text[:-1]

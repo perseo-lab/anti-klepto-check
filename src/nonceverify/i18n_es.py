@@ -431,6 +431,12 @@ BY_ID = {
     "k425": 'Host',
     "k426": 'Mueve el joystick para responder',
     "k427": 'pulsa: instrucciones',
-    "k428": 'las palabras aparecen con cuatro o menos',
+    "k428": 'aparecen con cuatro o menos',
     "k429": 'La semilla y la passphrase se han quitado de la memoria de la aplicación.\n\nDesconecta la alimentación: así la RAM se vacía por completo.',
+    # v7.13: classic SeedSigner
+    "k430": '¿Quién firmó?',
+    "k431": 'cambio y comisión',
+    "k432": '1. Carga la semilla: SeedQR o palabras, luego la passphrase.\n2. Elige el dispositivo que firmó; escanea la PSBT firmada desde Sparrow.\n3. Compara el txid, lee el resultado, elige Transmitir y carga ese QR en Sparrow.',
+    "k433": 'En Sparrow, la pestaña de la transacción muestra el Transaction ID. Compara las cuatro filas con esta pantalla. Igual: elige Mismo txid. Distinto: elige Distinto.',
+    "k434": 'Cada firma de esta semilla usa el nonce que debía usar, sighash ALL, S baja, y el txid es el de Sparrow. Elige Transmitir.',
 }
