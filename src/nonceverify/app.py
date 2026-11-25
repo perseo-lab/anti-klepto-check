@@ -10,75 +10,39 @@ this process's memory until "Done" or until the UPS HAT switch cuts the power; a
 descriptor scanned for "Check address" stays in RAM for the seed session too. Nothing is
 ever written to the microSD.
 """
-import base64
 import logging
 import random
 import time
 
 from nonceverify import address, crypto, i18n, seedqr, storage, transport, ui, wordentry
 from nonceverify.hw import HEIGHT, WIDTH, Event, QRDecoderError, decode_qr
-from nonceverify.psbt import PSBTError, combine_final_tx, has_signatures, parse_psbt, parse_tx
+from nonceverify.psbt import PSBTError
 from nonceverify.verify import (OWNER__EXTERNAL, OWNER__FAKE, OWNER__OURS, OWNER__UNVERIFIED,
-    GRIND__EMBIT, GRIND__LIBSECP, GRIND__NONE, STATUS__FAIL, STATUS__FOREIGN,
-    STATUS__OK, STATUS__UNSIGNED, STATUS__UNVERIFIABLE, VERDICT__FAIL, VERDICT__OK, VERDICT__PARTIAL, verify_psbt)
-
-# The signer under test, chosen by name on the "Seed ready" screen. Each one maps to the
-# low-R grinding rule its firmware follows (verify.py keeps the three rules); the rule is
-# what the nonce check uses, the name is what the user recognizes.
-#   Coldcard Q: libsecp256k1, retry until r < 2^255 (low R, as Bitcoin Core);
-#   SeedSigner: embit, retry until the DER signature is <= 70 bytes;
-#   Trezor: trezor-crypto / secp256k1-zkp, first RFC 6979 nonce, no retry (firmware
-#     source: core/src/apps/bitcoin/common.py ecdsa_sign -> secp256k1.sign with no
-#     canonical callback -> crypto/ecdsa.c or zkp_ecdsa.c, retry counter 0; confirmed on
-#     a real Trezor on 8 Nov 2026).
-SIGNER__COLDCARD_Q = "coldcard_q"
-SIGNER__SEEDSIGNER = "seedsigner"
-SIGNER__TREZOR = "trezor"
-SIGNERS = {
-    SIGNER__COLDCARD_Q: ("Coldcard Q", GRIND__LIBSECP),
-    SIGNER__SEEDSIGNER: ("SeedSigner", GRIND__EMBIT),
-    SIGNER__TREZOR: ("Trezor", GRIND__NONE),
-}
-GRINDING_SHORT = {GRIND__LIBSECP: "libsecp", GRIND__EMBIT: "embit", GRIND__NONE: "none"}
-
-
-def signer_name(signer: str) -> str:
-    return SIGNERS[signer][0]
-
-
-def signer_grinding(signer: str) -> str:
-    return SIGNERS[signer][1]
-
-
-def show_spaces(text: str) -> str:
-    """ Spaces made visible (the keyboard can't type a middle dot, so no ambiguity) """
-    return text.replace(" ", "·")
-
+    STATUS__FAIL, STATUS__FOREIGN, STATUS__OK, STATUS__UNSIGNED, STATUS__UNVERIFIABLE, VERDICT__FAIL, VERDICT__OK,
+    VERDICT__PARTIAL)
+from nonceverify import flow
+# v7.11: the flow's rules live in flow.py (no screen code); the names stay here too
+from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and older call sites)
+    SIGNER__COLDCARD_Q, SIGNER__SEEDSIGNER, SIGNER__TREZOR, SIGNERS,
+    GRINDING_SHORT, BBQR_PART_CHARS, EXPLORER_MAX_ACCOUNT, EXPLORER_MAX_INDEX, EXPLORER_PAGE, KEY_CHECK_GROUPS,
+    Session, bbqr_parts, btc, btc_amount, can_export, indexed, key_dependent_start, lock_after_red,
+    show_spaces, signer_grinding, signer_name, txid_rows)
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.10"
+VERSION = "7.11"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
 RNG = random.SystemRandom()
 
-
-def btc(sats) -> str:
-    if sats is None:
-        return "?"
-    return f"{sats / 1e8:.8f} BTC"
+# v7.11: the levels decided in flow.py, in this front end's colors
+LEVEL_COLORS = {flow.LEVEL__GREEN: ui.GREEN, flow.LEVEL__YELLOW: ui.YELLOW, flow.LEVEL__RED: ui.RED}
 
 
-def btc_amount(sats) -> str:
-    """ v7.9: the amount alone, as Sparrow writes it in BTC (the unit is drawn apart) """
-    return "?" if sats is None else f"{sats / 1e8:.8f}"
-
-
-def txid_rows(txid: str) -> list:
-    """ The 64 hex digits in 4 rows of 4 groups of 4, as they are compared by eye """
-    groups = [txid[i:i + 4] for i in range(0, len(txid), 4)]
-    return [" ".join(groups[i:i + 4]) for i in range(0, len(groups), 4)]
+def colored(decision):
+    """ (level, ...) from flow.py -> (color, ...) """
+    return (LEVEL_COLORS[decision[0]],) + tuple(decision[1:])
 
 
 # ---------------------------------------------------------------------------------------
@@ -355,7 +319,7 @@ class SeedReadyScreen(ui.Screen):
     help_topic = "signer"  # v7.9: the "?" page
     step = 1
     GRINDING_Y = 196
-    ORDER = (SIGNER__COLDCARD_Q, SIGNER__SEEDSIGNER, SIGNER__TREZOR)
+    ORDER = flow.SIGNER_ORDER
 
     def __init__(self, fingerprint: str, words: int, has_passphrase: bool, signer: str = None,
                  locked: bool = False):
@@ -608,15 +572,6 @@ class TxidCheckScreen(ui.Screen):
             d.text((WIDTH / 2, ui.TOP + 76 + i * 38), row, fill=ui.ACCENT if i % 2 == 0 else ui.TEXT, font=f, anchor="mm")
 
 
-def can_export(report, txid_confirmed: bool) -> bool:
-    """
-    v7.5 review: the Tx QR only on green. On "this seed clean" the transaction would carry
-    the unchecked cosigner signature, or is not complete; v7.6: not with an unproven change.
-    """
-    return bool(txid_confirmed and report.broadcast_tx and report.verdict == VERDICT__OK
-                and not report.change_unverified)
-
-
 class ResultScreen(ui.Screen):
     """
     v7.9: with the txid confirmed and the nonces clean (green, or a
@@ -641,8 +596,7 @@ class ResultScreen(ui.Screen):
         self.signer = signer
         self.txid_confirmed = txid_confirmed
         self.details = details
-        self.summary = (not details and txid_confirmed and report.verdict in (VERDICT__OK, VERDICT__PARTIAL)
-                        and not self.seed_mismatch())
+        self.summary = flow.shows_summary(report, txid_confirmed, details)
         lines = []
         add = lambda text, color=ui.TEXT, size=17, mono=False: lines.append((text, color, size, mono))
         colors = {STATUS__OK: ui.GREEN, STATUS__FAIL: ui.RED, STATUS__UNSIGNED: ui.YELLOW,
@@ -674,9 +628,7 @@ class ResultScreen(ui.Screen):
                                 "on.", ui.font(15), width):
                 add(line, ui.YELLOW, 15)
         # v7.6: where the money goes, change proven or not, at the top
-        external = [o for o in report.outputs if o.owner == OWNER__EXTERNAL]
-        ours = [o for o in report.outputs if o.owner == OWNER__OURS]
-        unverified = [o for o in report.outputs if o.owner == OWNER__UNVERIFIED]
+        external, ours, unverified = flow.outputs_by_owner(report)
         add(f"Sends {btc(sum(o.amount for o in external))} to {len(external)} other address(es)", ui.TEXT, 17)
         for o in ours:
             add(f"Change {btc(o.amount)}: YOURS, {o.label}", ui.GREEN, 17)
@@ -723,86 +675,29 @@ class ResultScreen(ui.Screen):
         add(f"Fee: {btc(report.fee)}", ui.TEXT, 17)
         self.list = ui.ScrollList(lines, ui.HEADER_H + self.BANNER_H + 8, HEIGHT - ui.BUTTON_H - 2 * ui.PAD)
         self.can_export = can_export(report, txid_confirmed)
-        if self.summary:
-            # v7.9: Finish moves to Details; what to do with the result stays here
-            if self.can_export:
-                self.buttons = ui.bottom_row(["Details", "Broadcast", "Next PSBT"],
-                                             primary_index=2 if report.change_warning else 1,
-                                             values=["details", "txqr", "again"], icons=[None, "qr", "camera"])
-            else:
-                self.buttons = ui.bottom_row(["Details", "Next PSBT"], primary_index=1, values=["details", "again"],
-                                             icons=[None, "camera"])
-        elif details:
-            self.buttons = ui.bottom_row(["Finish", "Back"], primary_index=1, values=["done", "back"],
-                                         icons=["power", "back"])
-        elif self.can_export:
-            self.buttons = ui.bottom_row(["Finish", "Broadcast", "Next PSBT"],
-                                         primary_index=2 if report.change_warning else 1,
-                                         values=["done", "txqr", "again"], icons=["power", "qr", "camera"])
-        else:
-            self.buttons = ui.bottom_row(["Finish", "Next PSBT"], primary_index=1, values=["done", "again"],
-                                         icons=["power", "camera"])
+        actions, primary = flow.result_actions(report, txid_confirmed, self.summary, details)
+        self.buttons = ui.bottom_row([a[0] for a in actions], primary_index=primary,
+                                     values=[a[1] for a in actions], icons=[a[2] for a in actions])
 
     def seed_mismatch(self) -> bool:
-        return not self.report.seed_matches and self.report.verdict == VERDICT__FAIL and \
-            not any(r.status == STATUS__FAIL for r in self.report.inputs)
+        return flow.seed_mismatch(self.report)
 
     def banner(self):
         """ (color, icon, headline, subline) """
-        if self.seed_mismatch():
-            return ui.RED, "x_circle", "SEED DOES NOT MATCH", "check seed and passphrase"
-        if self.report.verdict == VERDICT__OK and self.txid_confirmed and self.report.change_unverified:
-            return ui.YELLOW, "warning", "CHANGE NOT VERIFIED", "do not broadcast yet: see below"
-        if self.report.verdict == VERDICT__OK and self.txid_confirmed and self.report.change_warning:
-            return ui.YELLOW, "warning", "NONCE OK · CHANGE?", "your change is somewhere unusual: see below"
-        if self.report.verdict == VERDICT__OK and self.txid_confirmed:
-            who = signer_name(self.signer) if self.signer in SIGNERS else None
-            what = "tap Broadcast" if self.report.broadcast_tx else "broadcast"
-            return ui.GREEN, "ok_circle", "NONCE OK", (f"{who} signatures clean, txid OK: {what}"
-                                                       if who else f"no covert channel, txid OK: {what}")
-        if self.report.verdict == VERDICT__PARTIAL and self.txid_confirmed:
-            if self.report.unchecked_cosigners:
-                return ui.YELLOW, "warning", "THIS SEED: CLEAN", \
-                    f"do not broadcast yet: {self.report.unchecked_cosigners} cosigner signature(s) to check"
-            return ui.YELLOW, "warning", "THIS SEED: CLEAN", "not complete: scan again when fully signed"
-        if self.report.verdict in (VERDICT__OK, VERDICT__PARTIAL):
-            # never shown by the app (the txid step comes first), kept for safety
-            return ui.YELLOW, "warning", "COMPARE THE TXID", "nonces OK: compare the txid before broadcasting"
-        if self.report.verdict == VERDICT__FAIL:
-            return ui.RED, "x_circle", "DO NOT BROADCAST", "a signature or the transaction is not what it must be"
-        return ui.YELLOW, "warning", "INCOMPLETE CHECK", "not everything can be verified: not green"
+        return colored(flow.result_banner(self.report, self.signer, self.txid_confirmed))
 
     def summary_banner(self):
         """ v7.9: (color, icon, headline, subline), short enough for the 40-pixel banner """
-        r = self.report
-        if r.verdict == VERDICT__OK and r.change_unverified:
-            return ui.YELLOW, "warning", "CHANGE NOT VERIFIED", "do not broadcast yet"
-        if r.verdict == VERDICT__OK and r.change_warning:
-            return ui.YELLOW, "warning", "CHANGE?", "nonce OK · check below"
-        if r.verdict == VERDICT__OK:
-            who = signer_name(self.signer) if self.signer in SIGNERS else None
-            return ui.GREEN, "ok_circle", "NONCE OK", f"{who} · txid OK" if who else "txid OK"
-        if r.unchecked_cosigners:
-            return ui.YELLOW, "warning", "THIS SEED: CLEAN", f"{r.unchecked_cosigners} cosigner sig. to check"
-        return ui.YELLOW, "warning", "THIS SEED: CLEAN", "not complete"
+        return colored(flow.summary_banner(self.report, self.signer))
 
     def summary_note(self):
         """ v7.9: one line under the fee when something must be read in Details """
-        r = self.report
-        if r.verdict == VERDICT__PARTIAL and r.unchecked_cosigners:
-            return "Do not broadcast yet: cosigners to check, see Details", ui.YELLOW
-        if r.verdict == VERDICT__PARTIAL:
-            return "Not fully signed yet: scan again when it is", ui.YELLOW
-        if r.extra_fields:
-            return f"{r.extra_fields} extra PSBT field(s): broadcast only with Broadcast", ui.YELLOW
-        return None, None
+        note, level = flow.summary_note(self.report)
+        return note, LEVEL_COLORS.get(level)
 
     def card_texts(self):
         """ v7.9: (sends, change) cards: (label, label color, sats, [(line, color, mono)], outline) """
-        r = self.report
-        external = [o for o in r.outputs if o.owner == OWNER__EXTERNAL]
-        ours = [o for o in r.outputs if o.owner == OWNER__OURS]
-        unverified = [o for o in r.outputs if o.owner == OWNER__UNVERIFIED]
+        external, ours, unverified = flow.outputs_by_owner(self.report)
         width = self.SENDS_CARD[2] - self.SENDS_CARD[0] - 20
         if len(external) == 1:
             lines = address_lines(external[0].address, width)
@@ -1045,43 +940,9 @@ class DescriptorScreen(ui.Screen):
         return super().on_event(event)
 
 
-KEY_CHECK_GROUPS = 3
-
-
-def key_dependent_start(xpub_text: str) -> int:
-    """
-    v7.5 review: the first character of the xpub that depends on its PUBLIC KEY. Base58
-    writes the 78 bytes as one number: the leading ~60 characters are fixed by version,
-    depth, parent fingerprint, child number and chain code, all public, so a look-alike
-    key with the real chain code matches them for free. Found by changing the key and
-    seeing where the text changes (a few variants: the earliest difference wins).
-    """
-    from nonceverify.psbt import base58check
-    raw = address.b58decode_check(xpub_text)
-    first = len(xpub_text)
-    for n in range(1, 9):
-        other = crypto.pubkey_compressed(crypto.point_mul_g(n * 0x1000003 + 7))
-        text = base58check(raw[:45] + other)
-        first = min(first, next((i for i, (a, b) in enumerate(zip(text, xpub_text)) if a != b), first))
-    return first
-
-
 def pick_groups(xpub_text: str, rng=None, count: int = KEY_CHECK_GROUPS) -> list:
-    """
-    Group indexes (groups of four) to find on the paper, chosen by the device at random
-    among the groups that depend on the public key, the last (short) group excluded.
-    Matching one unpredictable group costs a forger ~58^4 = 2^23 tries per key and
-    group; matching enough of them to pass three random picks is out of reach.
-    """
-    rng = rng or RNG
-    groups = address.grouped(xpub_text).split(" ")
-    lo = (key_dependent_start(xpub_text) + 3) // 4            # first whole group after the change
-    hi = len(groups) - 1 if len(groups[-1]) < 4 else len(groups)
-    pool = list(range(lo, hi))
-    picked = []
-    for _ in range(min(count, len(pool))):
-        picked.append(pool.pop(rng.randrange(len(pool))))
-    return sorted(picked)
+    """ flow.pick_groups with this module's RNG (tests replace app.RNG) """
+    return flow.pick_groups(xpub_text, rng or RNG, count)
 
 
 class KeyCheckScreen(ui.Screen):
@@ -1237,16 +1098,6 @@ class AddressResultScreen(ui.Screen):
 # ---------------------------------------------------------------------------------------
 # v7.3: address explorer
 # ---------------------------------------------------------------------------------------
-EXPLORER_PAGE = 4                     # v7.5: 40-pixel rows (were 6 of 26)
-EXPLORER_MAX_INDEX = 0x7FFFFFFF - EXPLORER_PAGE
-EXPLORER_MAX_ACCOUNT = 99
-
-
-def indexed(explorer) -> bool:
-    """ Addresses numbered by an index (a descriptor without /* has a single address) """
-    return getattr(explorer, "wildcard", lambda: True)()
-
-
 def address_lines(text: str, width: int) -> list:
     """ v7.9: the whole address in groups of four, in at most two lines (the font shrinks if needed) """
     groups = address.grouped(text).split(" ")
@@ -1299,24 +1150,6 @@ def address_qr(text: str, size: int):
     """ The address as a QR (bech32 uppercase: a smaller QR, and BIP173 allows it) """
     bech32 = text.lower().startswith(("bc1", "tb1", "bcrt1"))
     return checked_qr(text.upper() if bech32 else text, size)
-
-
-# v7.5: the verified transaction as BBQr (Coinkite), file type "T", base32: Sparrow reads
-# it with File > Load Transaction > From QR (and Coldcard Q too). Parts sized for QR
-# version 8 (M): 4-pixel modules in the 230-pixel box, easy for a webcam.
-BBQR_PART_CHARS = 192
-
-
-def bbqr_parts(raw: bytes, file_type: str = "T") -> list:
-    data = base64.b32encode(raw).decode("ascii").rstrip("=")
-    chunks = [data[i:i + BBQR_PART_CHARS] for i in range(0, len(data), BBQR_PART_CHARS)] or [""]
-    if len(chunks) > 36 * 36 - 1:
-        raise ValueError("transaction too large for BBQr")
-
-    def b36(n):
-        digits = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        return digits[n // 36] + digits[n % 36]
-    return [f"B$2{file_type}{b36(len(chunks))}{b36(i)}{c}" for i, c in enumerate(chunks)]
 
 
 class BroadcastScreen(ui.Screen):
@@ -1639,52 +1472,6 @@ def address_flow(hw, session):
 # ---------------------------------------------------------------------------------------
 # The flow
 # ---------------------------------------------------------------------------------------
-class Session:
-    """ What the app keeps between screens: the BIP32 master node, nothing else secret """
-    def __init__(self):
-        self.master = None
-        self.words = 0
-        self.has_passphrase = False
-        self.signer = None               # chosen by name after every seed load
-        self.signer_locked = False       # True once "Scan PSBT" was pressed in this seed session
-        self.failed = {}                 # txid -> signer it was red under; kept until power-off (v7)
-        self.descriptor = None           # v7: wallet descriptor for "Check address" (public data)
-        # v7.5: (pubkey, signature) pairs whose nonce a seed of this power-on verified,
-        # green and txid confirmed. Public data, kept across "Change seed": a multisig's
-        # cosigner signatures become checked when their own seed is loaded and the same
-        # PSBT scanned again.
-        self.clean_sigs = set()
-        self.coldcard_intro_shown = False
-
-    def wipe(self):
-        if self.master is not None:
-            self.master.wipe()
-        self.master = None
-        self.signer = None
-        self.signer_locked = False
-        # self.failed is kept: a transaction that came out red stays red until power-off,
-        # also after "Change seed" (txids are public data)
-        self.words = 0
-        self.has_passphrase = False
-        # v7.6 review: the descriptor is kept (public data, every key of it verified by
-        # derivation or on the paper): the cosigner's seed checks the same multisig change
-
-    def set_seed(self, mnemonic: str, passphrase: str):
-        if self.master is not None:
-            self.master.wipe()
-        self.master = crypto.HDKey.from_seed(crypto.bip39_seed(mnemonic, passphrase))
-        self.words = len(mnemonic.split())
-        self.has_passphrase = bool(passphrase)
-
-    @staticmethod
-    def fingerprint_of(mnemonic: str, passphrase: str) -> str:
-        node = crypto.HDKey.from_seed(crypto.bip39_seed(mnemonic, passphrase))
-        try:
-            return node.fingerprint.hex()
-        finally:
-            node.wipe()
-
-
 def load_seed(hw, session: Session, method: str = "scan_seed") -> bool:
     if method == "type_seed":
         mnemonic = wordentry.enter_mnemonic(hw)
@@ -1736,9 +1523,9 @@ def check_psbt(hw, session: Session) -> str:
         return "back"
     try:
         first = collector.result
-        if transport.looks_like_final_tx(first):
+        kind, psbt = flow.first_payload(first, session.signer)
+        if kind == flow.FIRST__FINAL_TX:
             # v7.2: a final transaction (Coldcard Q): its unsigned PSBT gives the amounts
-            parse_tx(first)
             ui.MessageScreen("1 of 2: final transaction read",
                              "Now the UNSIGNED PSBT of the same transaction, from Sparrow: it carries the "
                              "amounts and paths needed to check the signatures.",
@@ -1746,27 +1533,23 @@ def check_psbt(hw, session: Session) -> str:
             unsigned = scan_second(hw, "2 of 2: unsigned PSBT", final=False)
             if unsigned is None:
                 return "back"
-            psbt = combine_final_tx(parse_psbt(unsigned), first)
-        else:
-            psbt = parse_psbt(first)
-            if not has_signatures(psbt):
-                if not coldcard:
-                    ui.MessageScreen("PSBT without signatures", "This is the unsigned PSBT. Scan the SIGNED one "
-                                     "from Sparrow (after loading what the signer returned).",
-                                     heading_color=ui.YELLOW, icon_name="warning").run(hw)
-                    return "again"
-                ui.MessageScreen("1 of 2: unsigned PSBT read",
-                                 "Now the signed transaction, from Sparrow (the Q's .txn loaded there).",
-                                 buttons=("Scan final transaction",), heading_color=ui.ACCENT,
-                                 icon_name="camera").run(hw)
-                final = scan_second(hw, "2 of 2: final transaction", final=True)
-                if final is None:
-                    return "back"
-                psbt = combine_final_tx(psbt, final)
+            psbt = flow.combine(kind, first, unsigned)
+        elif kind == flow.FIRST__UNSIGNED:
+            ui.MessageScreen("PSBT without signatures", "This is the unsigned PSBT. Scan the SIGNED one "
+                             "from Sparrow (after loading what the signer returned).",
+                             heading_color=ui.YELLOW, icon_name="warning").run(hw)
+            return "again"
+        elif kind == flow.FIRST__UNSIGNED_COLDCARD:
+            ui.MessageScreen("1 of 2: unsigned PSBT read",
+                             "Now the signed transaction, from Sparrow (the Q's .txn loaded there).",
+                             buttons=("Scan final transaction",), heading_color=ui.ACCENT,
+                             icon_name="camera").run(hw)
+            final = scan_second(hw, "2 of 2: final transaction", final=True)
+            if final is None:
+                return "back"
+            psbt = flow.combine(kind, psbt, final)
         working = WorkingScreen(hw)
-        report = verify_psbt(psbt, session.master, progress=working, scan_progress=working.scan,
-                             grinding=signer_grinding(session.signer), clean_elsewhere=session.clean_sigs,
-                             descriptor=session.descriptor)
+        report = flow.check(psbt, session, progress=working, scan_progress=working.scan)
     except (PSBTError, ValueError) as e:
         ui.MessageScreen("PSBT not readable", str(e)[:160] + ". Scan it again from Sparrow; if it keeps "
                          "failing, export the PSBT again.", heading_color=ui.RED, icon_name="x_circle").run(hw)
@@ -1778,19 +1561,10 @@ def check_psbt(hw, session: Session) -> str:
         return "again"
     lock_after_red(session, report)
     confirmed = False
-    if report.verdict in (VERDICT__OK, VERDICT__PARTIAL):
+    if flow.needs_txid(report):
         # v7: no green before the txid has been compared with Sparrow's (v7.8: read and
         # confirm, no quiz on the ending)
-        if TxidCheckScreen(report).run(hw) == "same":
-            confirmed = True
-            for r in report.inputs:
-                session.clean_sigs.update(r.checked_sigs)
-        else:
-            report.verdict = VERDICT__FAIL
-            report.tx_problem = ("The txid is NOT the one in Sparrow: the transaction checked here is not "
-                                 "the one Sparrow would broadcast. Do not broadcast.")
-            # v7.5 review: a txid mismatch says nothing about the
-            # signer: it is not recorded as red for the other seeds and devices of a multisig
+        confirmed = flow.confirm_txid(session, report, TxidCheckScreen(report).run(hw) == "same")
     while True:
         choice = ResultScreen(report, session.signer, txid_confirmed=confirmed).run(hw)
         if choice == "txqr":
@@ -1813,9 +1587,9 @@ def scan_second(hw, heading: str, final: bool):
         collector.add(payload)
         if collector.complete:
             state["collector"] = transport.PSBTCollector()         # wrong kind: start clean
-            if transport.looks_like_final_tx(collector.result) != final:
-                raise transport.TransportError(transport.NOT_FINAL_TX_MESSAGE if final else
-                                               "this is the final transaction again: scan the unsigned PSBT")
+            problem = flow.second_payload_problem(collector.result, final)
+            if problem:
+                raise transport.TransportError(problem)
             state["result"] = collector.result
             return True, 1.0, ""
         return False, collector.progress, "QR of another PSBT: starting over" if collector.restarted else ""
@@ -1823,24 +1597,6 @@ def scan_second(hw, heading: str, final: bool):
     if ScanScreen(heading, on_payload, help_topic="scan_psbt").run(hw) is None:
         return None
     return state["result"]
-
-
-def lock_after_red(session: Session, report):
-    """
-    Defence in depth behind Session.signer_locked: a transaction that came out red stays
-    red for the rest of this seed session, under whatever signer.
-    """
-    earlier = session.failed.get(report.txid) if report.txid else None
-    if earlier is not None and earlier != session.signer and report.verdict != VERDICT__FAIL:
-        report.verdict = VERDICT__FAIL
-        message = (f"This transaction already came out NOT valid with «{signer_name(earlier)}». "
-                   "Changing the signer doesn't make it clean: do not broadcast.")
-        report.tx_problem = message + (" " + report.tx_problem if report.tx_problem else "")
-    # "SEED DOES NOT MATCH" (wrong seed or passphrase) says nothing about the signer: not kept
-    seed_mismatch = not report.seed_matches and not report.tx_problem and \
-        not any(r.status == STATUS__FAIL for r in report.inputs)
-    if report.verdict == VERDICT__FAIL and report.txid and report.txid not in session.failed and not seed_mismatch:
-        session.failed[report.txid] = session.signer
 
 
 def run(hw, session: Session = None, splash: bool = True):
@@ -1859,8 +1615,7 @@ def run(hw, session: Session = None, splash: bool = True):
         ready = SeedReadyScreen(session.master.fingerprint.hex(), session.words,
                                 session.has_passphrase, session.signer, session.signer_locked)
         choice = ready.run(hw)
-        if not session.signer_locked:
-            session.signer = ready.signer
+        session.choose_signer(ready.signer)
         if choice == "change_seed":
             if confirm_wipe(hw):
                 session.wipe()
@@ -1868,14 +1623,9 @@ def run(hw, session: Session = None, splash: bool = True):
         if choice == "address":
             address_flow(hw, session)
             continue
-        if choice != "scan_psbt" or session.signer not in SIGNERS:
+        # v7.11: the signer is fixed as soon as a scan starts (flow.Session.lock_signer)
+        if choice != "scan_psbt" or not session.lock_signer():
             continue
-        # One signer per seed session, fixed as soon as a scan starts (v7; before, after
-        # the first verdict). Each rule accepts exactly one signature, but the rules differ:
-        # a Coldcard that skipped its low-R grinding is red as "Coldcard Q" and, about half
-        # the time, green as "Trezor". If the name could change after a scan, the signer's
-        # choice of rule would come back through the user.
-        session.signer_locked = True
         while True:
             outcome = check_psbt(hw, session)
             if outcome == "again":
