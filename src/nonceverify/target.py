@@ -11,4 +11,4 @@ the classic one (git diff vX.Y vX.Y-classic shows only TARGET).
 TARGET__MAX = "max"
 TARGET__CLASSIC = "classic"
 
-TARGET = TARGET__MAX
+TARGET = TARGET__CLASSIC
