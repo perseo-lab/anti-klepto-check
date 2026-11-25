@@ -426,3 +426,221 @@ EXPLORER_MAX_ACCOUNT = 99
 def indexed(explorer) -> bool:
     """ Addresses numbered by an index (a descriptor without /* has a single address) """
     return getattr(explorer, "wildcard", lambda: True)()
+
+
+# ---------------------------------------------------------------------------------------
+# v7.12: the steps of a session, for any front end
+# ---------------------------------------------------------------------------------------
+# The order of the steps is part of the check (no result before the txid, the signer fixed
+# at the first scan, red kept): it is written here once. A front end draws each step in
+# its own way and returns what the user chose. What it must offer (duck typing):
+#
+#   splash()                                  until the user starts
+#   home() -> "scan_seed" | "type_seed"       how to load the seed
+#   scan(heading, on_payload, topic, errors=()) -> True | None (back)
+#       on_payload(bytes) -> (done, progress 0-1, note), may raise one of `errors`
+#   type_mnemonic() -> mnemonic | None
+#   passphrase_question(xfp, words) -> "none" | "enter"
+#   passphrase_keyboard(text) -> text
+#   confirm_passphrase(passphrase, xfp) -> "ok" | "edit"
+#   seed_ready(xfp, words, has_passphrase, signer, locked) -> (choice, signer)
+#       choice: "scan_psbt" | "change_seed" | "address" | other (back to the same screen)
+#   message(heading, body, tone, icon, buttons=("OK",), values=None, primary=0) -> value
+#       tone: TONE__ACCENT | TONE__YELLOW | TONE__RED
+#   working() -> progress callable (index, total), with .scan(index, total)
+#   txid_check(report) -> "same" | other
+#   result(report, signer, txid_confirmed, details) -> one of the ACTION__ values
+#   broadcast(report)
+#   address(session)                          optional: the address checks (v7)
+#   error(exception)                          an unexpected error, the seed kept
+TONE__ACCENT = "accent"
+SWITCH_OFF__UPS_HAT = "Switch off with the UPS HAT switch: that clears the RAM completely."
+TONE__YELLOW = "yellow"
+TONE__RED = "red"
+
+
+class QRPayload:
+    """ One QR (or one series of QR parts) collected by fe.scan() """
+    def __init__(self, collector=None):
+        self.collector = collector or transport.PSBTCollector()
+        self.result = None
+
+    def __call__(self, payload):
+        c = self.collector
+        c.restarted = False
+        c.add(payload)
+        note = "QR of another PSBT: starting over" if c.restarted else ""
+        return c.complete, c.progress, note
+
+
+def load_seed(fe, session: Session, method: str = "scan_seed") -> bool:
+    if method == "type_seed":
+        mnemonic = fe.type_mnemonic()
+        if mnemonic is None:
+            return False
+    else:
+        found = {}
+
+        def on_payload(payload):
+            from nonceverify import seedqr
+            found["mnemonic"] = seedqr.decode(payload)
+            return True, 1.0, ""
+
+        if fe.scan("SeedQR", on_payload, "seed") is None:
+            return False
+        mnemonic = found.pop("mnemonic")
+    words = len(mnemonic.split())
+    choice = fe.passphrase_question(Session.fingerprint_of(mnemonic, ""), words)
+    passphrase = ""
+    if choice == "enter":
+        while True:
+            passphrase = fe.passphrase_keyboard(passphrase)
+            if fe.confirm_passphrase(passphrase, Session.fingerprint_of(mnemonic, passphrase)) == "ok":
+                break
+    session.set_seed(mnemonic, passphrase)
+    del mnemonic, passphrase
+    return True
+
+
+def scan_second(fe, heading: str, final: bool):
+    """ The second QR of a final transaction + unsigned PSBT pair (v7.2), raw bytes or None """
+    state = {"collector": transport.PSBTCollector(), "result": None}
+
+    def on_payload(payload):
+        collector = state["collector"]
+        collector.restarted = False
+        collector.add(payload)
+        if collector.complete:
+            state["collector"] = transport.PSBTCollector()         # wrong kind: start clean
+            problem = second_payload_problem(collector.result, final)
+            if problem:
+                raise transport.TransportError(problem)
+            state["result"] = collector.result
+            return True, 1.0, ""
+        return False, collector.progress, "QR of another PSBT: starting over" if collector.restarted else ""
+
+    if fe.scan(heading, on_payload, "scan_psbt") is None:
+        return None
+    return state["result"]
+
+
+def check_psbt(fe, session: Session, log=None) -> str:
+    """ Scan, check, txid, result. Returns "again" (next PSBT), "back", "done" (Finish) or "keep" """
+    from nonceverify.psbt import PSBTError
+    payload = QRPayload()
+    coldcard = session.signer == SIGNER__COLDCARD_Q
+    if coldcard and not session.coldcard_intro_shown:
+        session.coldcard_intro_shown = True
+        fe.message("Coldcard Q: two QR codes", "Both from Sparrow, in any order:\n"
+                   "1. the signed transaction: load the Q's .txn in Sparrow, then show it as QR;\n"
+                   "2. the UNSIGNED PSBT of the same transaction.\n"
+                   "At the end, broadcast the Tx QR shown here.",
+                   TONE__ACCENT, "camera", buttons=("Scan",))
+    heading = f"PSBT · {signer_name(session.signer)}"
+    if fe.scan(heading, payload, "scan_psbt") is None:
+        return "back"
+    try:
+        first = payload.collector.result
+        kind, psbt = first_payload(first, session.signer)
+        if kind == FIRST__FINAL_TX:
+            # v7.2: a final transaction (Coldcard Q): its unsigned PSBT gives the amounts
+            fe.message("1 of 2: final transaction read",
+                       "Now the UNSIGNED PSBT of the same transaction, from Sparrow: it carries the "
+                       "amounts and paths needed to check the signatures.",
+                       TONE__ACCENT, "camera", buttons=("Scan unsigned PSBT",))
+            unsigned = scan_second(fe, "2 of 2: unsigned PSBT", final=False)
+            if unsigned is None:
+                return "back"
+            psbt = combine(kind, first, unsigned)
+        elif kind == FIRST__UNSIGNED:
+            fe.message("PSBT without signatures", "This is the unsigned PSBT. Scan the SIGNED one "
+                       "from Sparrow (after loading what the signer returned).", TONE__YELLOW, "warning")
+            return "again"
+        elif kind == FIRST__UNSIGNED_COLDCARD:
+            fe.message("1 of 2: unsigned PSBT read",
+                       "Now the signed transaction, from Sparrow (the Q's .txn loaded there).",
+                       TONE__ACCENT, "camera", buttons=("Scan final transaction",))
+            final = scan_second(fe, "2 of 2: final transaction", final=True)
+            if final is None:
+                return "back"
+            psbt = combine(kind, psbt, final)
+        working = fe.working()
+        report = check(psbt, session, progress=working, scan_progress=working.scan)
+    except (PSBTError, ValueError) as e:
+        fe.message("PSBT not readable", str(e)[:160] + ". Scan it again from Sparrow; if it keeps "
+                   "failing, export the PSBT again.", TONE__RED, "x_circle")
+        return "again"
+    except Exception as e:
+        if log is not None:
+            log.exception("verification error")
+        fe.message("Verification error", f"{type(e).__name__}: not checked, so not green. The seed "
+                   "stays loaded: try the scan again.", TONE__RED, "warning")
+        return "again"
+    lock_after_red(session, report)
+    confirmed = False
+    if needs_txid(report):
+        # v7: no green before the txid has been compared with Sparrow's (v7.8: read and
+        # confirm, no quiz on the ending)
+        confirmed = confirm_txid(session, report, fe.txid_check(report) == "same")
+    while True:
+        choice = fe.result(report, session.signer, confirmed, False)
+        if choice == ACTION__BROADCAST and can_export(report, confirmed):
+            fe.broadcast(report)
+        elif choice == ACTION__DETAILS:
+            # v7.9: txid, XFP, inputs, outputs; Finish is here, Back returns to the summary
+            if fe.result(report, session.signer, confirmed, True) == ACTION__FINISH:
+                return "done"
+        elif choice == ACTION__BROADCAST:
+            continue                         # never without can_export(), whatever the screen offered
+        else:
+            return choice
+
+
+def confirm_wipe(fe) -> bool:
+    """ v7.5: wiping the seed means typing it all again: ask, the destructive choice on the left """
+    choice = fe.message("Wipe the seed?", "Seed and passphrase are removed from memory: to check "
+                        "anything else you will load them again.", TONE__YELLOW, "lock",
+                        buttons=("Wipe", "Keep"), values=["wipe", "keep"], primary=1)
+    return choice == "wipe"
+
+
+def run(fe, session: Session = None, splash: bool = True, log=None):
+    """ The whole session: seed, signer, PSBTs, until power-off """
+    from nonceverify import seedqr
+    session = session or Session()
+    if splash:
+        fe.splash()                          # v7.4: until START
+    while True:
+        if session.master is None:
+            method = fe.home()
+            try:
+                if not load_seed(fe, session, method):
+                    continue
+            except seedqr.SeedQRError as e:
+                fe.message("Seed not valid", str(e), TONE__RED, "x_circle")
+                continue
+        choice, signer = fe.seed_ready(session.master.fingerprint.hex(), session.words, session.has_passphrase,
+                                       session.signer, session.signer_locked)
+        session.choose_signer(signer)
+        if choice == "change_seed":
+            if confirm_wipe(fe):
+                session.wipe()
+            continue
+        if choice == "address" and hasattr(fe, "address"):
+            fe.address(session)
+            continue
+        # v7.11: the signer is fixed as soon as a scan starts (Session.lock_signer)
+        if choice != "scan_psbt" or not session.lock_signer():
+            continue
+        while True:
+            outcome = check_psbt(fe, session, log)
+            if outcome == "again":
+                continue
+            if outcome == "done" and not confirm_wipe(fe):
+                outcome = "keep"             # v7.5: "Finish" asks first; "Keep" goes back to the seed
+            break
+        if outcome == "done":
+            session.wipe()
+            # how the power goes off depends on the hardware: the front end says it
+            fe.message("Seed wiped", "Seed and passphrase have been removed from the app's memory.\n\n"
+                       + getattr(fe, "SWITCH_OFF", SWITCH_OFF__UPS_HAT), TONE__ACCENT, "lock", buttons=("Start again",))

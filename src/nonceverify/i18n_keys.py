@@ -426,4 +426,14 @@ KEYS = {
     "k418": 'THIS SEED',
     "k419": 'then',
     "k420": 'of {0}',
+    # v7.12: classic SeedSigner (240x240, joystick)
+    "k421": 'Checksum wrong: choose the wrong word',
+    "k422": 'Joystick: move, push to choose. KEY1: this page. KEY2: delete or zoom. KEY3: back.',
+    "k423": 'KEYS',
+    "k424": 'Language',
+    "k425": 'Host',
+    "k426": 'Move the joystick to answer',
+    "k427": 'push: instructions',
+    "k428": 'the words appear at four or fewer',
+    "k429": "Seed and passphrase have been removed from the app's memory.\n\nUnplug the power: that clears the RAM completely.",
 }

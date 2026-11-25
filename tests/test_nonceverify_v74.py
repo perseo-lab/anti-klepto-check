@@ -37,7 +37,8 @@ def test_splash_waits_for_start_only(monkeypatch):
         app.run(hw)
     assert hw.shots["s1"].tobytes() == hw.shots["s0"].tobytes(), "taps off START and time don't leave the splash"
     assert hw.shots["home"].tobytes() != hw.shots["s0"].tobytes()
-    assert "timeout" not in inspect.getsource(app.run).split("SplashScreen().run(")[1].split(")")[0]
+    # v7.12: the splash is shown by the Seed Max front end (flow.run calls fe.splash())
+    assert "timeout" not in inspect.getsource(app.MaxFrontEnd.splash).split("SplashScreen().run(")[1].split(")")[0]
 
 
 def test_splash_layout():

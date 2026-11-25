@@ -273,9 +273,15 @@ def confirm_discard(hw, typed: int) -> bool:
     return choice == "drop"
 
 
-def enter_mnemonic(hw):
-    """ The whole word-entry flow. Returns the mnemonic (valid checksum) or None if cancelled """
-    count = WordCountScreen().run(hw)
+def enter_mnemonic(hw, screens=None):
+    """
+    The whole word-entry flow. Returns the mnemonic (valid checksum) or None if cancelled.
+    v7.12: `screens` gives WordCountScreen, WordEntryScreen, SeedReviewScreen and
+    confirm_discard for another screen (wordentry_classic); by default this module's.
+    """
+    import sys
+    s = screens or sys.modules[__name__]
+    count = s.WordCountScreen().run(hw)
     if count not in WORD_COUNTS:
         return None
     words = [""] * count
@@ -283,11 +289,11 @@ def enter_mnemonic(hw):
         index, reviewing = 0, False
         while True:
             if index >= count:
-                choice = SeedReviewScreen(words).run(hw)
+                choice = s.SeedReviewScreen(words).run(hw)
                 if choice == "ok":
                     return " ".join(words)
                 if choice == "cancel":
-                    if confirm_discard(hw, sum(1 for w in words if w)):
+                    if s.confirm_discard(hw, sum(1 for w in words if w)):
                         return None
                     continue
                 if isinstance(choice, tuple) and choice[0] == "edit":
@@ -295,13 +301,13 @@ def enter_mnemonic(hw):
                 continue
             # From the review the word is re-typed from scratch (it is the wrong one); going
             # back with "Back" keeps it, to fix just its last letters
-            screen = WordEntryScreen(index, count, "" if reviewing else words[index],
+            screen = s.WordEntryScreen(index, count, "" if reviewing else words[index],
                                      back_label="Review" if reviewing else "Back")
             result = screen.run(hw)
             screen.text = ""
             typed = sum(1 for w in words if w)
             if result[0] == "cancel":
-                if confirm_discard(hw, typed):
+                if s.confirm_discard(hw, typed):
                     return None
                 continue
             if result[0] == "word":
@@ -312,7 +318,7 @@ def enter_mnemonic(hw):
                     index = count
                 elif index > 0:
                     index -= 1
-                elif confirm_discard(hw, typed):
+                elif s.confirm_discard(hw, typed):
                     return None
     finally:
         for i in range(len(words)):

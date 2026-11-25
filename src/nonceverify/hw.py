@@ -75,10 +75,20 @@ def loaded_blocked_modules() -> list:
 
 
 class Event:
-    """ A tap or a vertical swipe, in screen coordinates """
+    """ A tap or a vertical swipe, in screen coordinates; or (v7.12) a key of the classic SeedSigner """
     TAP = "tap"
     SWIPE_UP = "swipe_up"         # finger moved up: show what is below
     SWIPE_DOWN = "swipe_down"
+    # v7.12: joystick and the three keys beside the 240x240 screen (hw_classic.py)
+    UP = "up"
+    DOWN = "down"
+    LEFT = "left"
+    RIGHT = "right"
+    PRESS = "press"               # the joystick pushed in
+    KEY1 = "key1"                 # the top key: help
+    KEY2 = "key2"
+    KEY3 = "key3"                 # the bottom key
+    KEYS = (UP, DOWN, LEFT, RIGHT, PRESS, KEY1, KEY2, KEY3)
 
     def __init__(self, kind: str, x: int = 0, y: int = 0):
         self.kind, self.x, self.y = kind, x, y
@@ -87,49 +97,11 @@ class Event:
         return f"Event({self.kind}, {self.x}, {self.y})"
 
 
-class Hardware:
-    """ The real device: ILI9486 panel, XPT2046 touch, Pi camera """
-    def __init__(self):
-        from seedsigner.hardware import hw_profile
-        from seedsigner.hardware.displays.ili9486 import ILI9486
-        from seedsigner.hardware.touch import TouchTracker
-        from seedsigner.hardware.xpt2046 import XPT2046
-
-        self.hw_profile = hw_profile
-        self.display = ILI9486(_width=WIDTH, _height=HEIGHT)
-        self.touch = XPT2046(width=WIDTH, height=HEIGHT)
-        self.tracker = TouchTracker()
-        self.stream = None
-        self.zoom = 1
-        self.battery = BatteryGauge()
-
-    # Display ------------------------------------------------------------------------
-    def show(self, image):
-        self.display.show_image(image.convert("RGB"))
-
-    # Touch --------------------------------------------------------------------------
-    def poll(self) -> list:
-        """ Taps and swipes since the last call (non-blocking) """
-        # Monotonic, as the signing SD's input loop (0028): a step of the system clock can't
-        # stretch or hide a release
-        now = int(time.monotonic() * 1000)
-        point = self.touch.read()
-        events = []
-        for e in self.tracker.feed(point, now):
-            if getattr(e, "is_tap", False):
-                events.append(Event(Event.TAP, e.x, e.y))
-            elif getattr(e, "is_swipe", False):
-                events.append(Event(Event.SWIPE_UP if e.direction == "up" else Event.SWIPE_DOWN, e.x, e.y))
-        return events
-
-    def wait(self, seconds: float = 0.005):
-        time.sleep(seconds)
-
-    # Battery (v7) -------------------------------------------------------------------
-    def battery_tick(self) -> bool:
-        """ Called by the screens' loops: True when the battery icon should be redrawn """
-        return self.battery.tick()
-
+class Camera:
+    """
+    The Pi camera, shared by every target (v7.12: split out of Hardware, unchanged). Needs
+    `self.hw_profile` (CAMERA_RESOLUTION, CAMERA_ROTATION), `self.stream` and `self.zoom`.
+    """
     # Camera -------------------------------------------------------------------------
     def camera_start(self):
         from seedsigner.hardware.pivideostream import PiVideoStream
@@ -179,6 +151,49 @@ class Hardware:
         except Exception:
             pass
 
+
+class Hardware(Camera):
+    """ The real device: ILI9486 panel, XPT2046 touch, Pi camera """
+    def __init__(self):
+        from seedsigner.hardware import hw_profile
+        from seedsigner.hardware.displays.ili9486 import ILI9486
+        from seedsigner.hardware.touch import TouchTracker
+        from seedsigner.hardware.xpt2046 import XPT2046
+
+        self.hw_profile = hw_profile
+        self.display = ILI9486(_width=WIDTH, _height=HEIGHT)
+        self.touch = XPT2046(width=WIDTH, height=HEIGHT)
+        self.tracker = TouchTracker()
+        self.stream = None
+        self.zoom = 1
+        self.battery = BatteryGauge()
+
+    # Display ------------------------------------------------------------------------
+    def show(self, image):
+        self.display.show_image(image.convert("RGB"))
+
+    # Touch --------------------------------------------------------------------------
+    def poll(self) -> list:
+        """ Taps and swipes since the last call (non-blocking) """
+        # Monotonic, as the signing SD's input loop (0028): a step of the system clock can't
+        # stretch or hide a release
+        now = int(time.monotonic() * 1000)
+        point = self.touch.read()
+        events = []
+        for e in self.tracker.feed(point, now):
+            if getattr(e, "is_tap", False):
+                events.append(Event(Event.TAP, e.x, e.y))
+            elif getattr(e, "is_swipe", False):
+                events.append(Event(Event.SWIPE_UP if e.direction == "up" else Event.SWIPE_DOWN, e.x, e.y))
+        return events
+
+    def wait(self, seconds: float = 0.005):
+        time.sleep(seconds)
+
+    # Battery (v7) -------------------------------------------------------------------
+    def battery_tick(self) -> bool:
+        """ Called by the screens' loops: True when the battery icon should be redrawn """
+        return self.battery.tick()
 
 class BatteryGauge:
     """

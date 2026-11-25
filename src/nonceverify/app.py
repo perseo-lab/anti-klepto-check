@@ -16,7 +16,6 @@ import time
 
 from nonceverify import address, crypto, i18n, seedqr, storage, transport, ui, wordentry
 from nonceverify.hw import HEIGHT, WIDTH, Event, QRDecoderError, decode_qr
-from nonceverify.psbt import PSBTError
 from nonceverify.verify import (OWNER__EXTERNAL, OWNER__FAKE, OWNER__OURS, OWNER__UNVERIFIED,
     STATUS__FAIL, STATUS__FOREIGN, STATUS__OK, STATUS__UNSIGNED, STATUS__UNVERIFIABLE, VERDICT__FAIL, VERDICT__OK,
     VERDICT__PARTIAL)
@@ -30,7 +29,7 @@ from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and old
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.11"
+VERSION = "7.12"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -1472,182 +1471,68 @@ def address_flow(hw, session):
 # ---------------------------------------------------------------------------------------
 # The flow
 # ---------------------------------------------------------------------------------------
-def load_seed(hw, session: Session, method: str = "scan_seed") -> bool:
-    if method == "type_seed":
-        mnemonic = wordentry.enter_mnemonic(hw)
-        if mnemonic is None:
-            return False
-    else:
-        found = {}
+class MaxFrontEnd:
+    """
+    v7.12: the steps of flow.run() drawn on the Seed Max hardware (480x320 touch). Each
+    method shows one screen of this module and returns what the user chose.
+    """
+    TONES = {flow.TONE__ACCENT: ui.ACCENT, flow.TONE__YELLOW: ui.YELLOW, flow.TONE__RED: ui.RED}
 
-        def on_payload(payload):
-            found["mnemonic"] = seedqr.decode(payload)
-            return True, 1.0, ""
+    def __init__(self, hw):
+        self.hw = hw
 
-        if ScanScreen("SeedQR", on_payload, help_topic="seed").run(hw) is None:
-            return False
-        mnemonic = found.pop("mnemonic")
-    words = len(mnemonic.split())
-    choice = PassphraseQuestionScreen(Session.fingerprint_of(mnemonic, ""), words).run(hw)
-    passphrase = ""
-    if choice == "enter":
-        while True:
-            result = ui.KeyboardScreen(passphrase).run(hw)
-            passphrase = result[1]
-            if ConfirmPassphraseScreen(passphrase, Session.fingerprint_of(mnemonic, passphrase)).run(hw) == "ok":
-                break
-    session.set_seed(mnemonic, passphrase)
-    del mnemonic, passphrase
-    return True
+    def splash(self):
+        SplashScreen().run(self.hw)
 
+    def home(self):
+        return HomeScreen().run(self.hw)
 
-def check_psbt(hw, session: Session) -> str:
-    collector = transport.PSBTCollector()
+    def scan(self, heading, on_payload, topic, errors=()):
+        return ScanScreen(heading, on_payload, errors=errors, help_topic=topic).run(self.hw)
 
-    def on_payload(payload):
-        collector.restarted = False
-        collector.add(payload)
-        note = "QR of another PSBT: starting over" if collector.restarted else ""
-        return collector.complete, collector.progress, note
+    def type_mnemonic(self):
+        return wordentry.enter_mnemonic(self.hw)
 
-    coldcard = session.signer == SIGNER__COLDCARD_Q
-    if coldcard and not session.coldcard_intro_shown:
-        session.coldcard_intro_shown = True
-        ui.MessageScreen("Coldcard Q: two QR codes", "Both from Sparrow, in any order:\n"
-                         "1. the signed transaction: load the Q's .txn in Sparrow, then show it as QR;\n"
-                         "2. the UNSIGNED PSBT of the same transaction.\n"
-                         "At the end, broadcast the Tx QR shown here.",
-                         buttons=("Scan",), heading_color=ui.ACCENT, icon_name="camera").run(hw)
-    heading = f"PSBT · {signer_name(session.signer)}"
-    if ScanScreen(heading, on_payload, help_topic="scan_psbt").run(hw) is None:
-        return "back"
-    try:
-        first = collector.result
-        kind, psbt = flow.first_payload(first, session.signer)
-        if kind == flow.FIRST__FINAL_TX:
-            # v7.2: a final transaction (Coldcard Q): its unsigned PSBT gives the amounts
-            ui.MessageScreen("1 of 2: final transaction read",
-                             "Now the UNSIGNED PSBT of the same transaction, from Sparrow: it carries the "
-                             "amounts and paths needed to check the signatures.",
-                             buttons=("Scan unsigned PSBT",), heading_color=ui.ACCENT, icon_name="camera").run(hw)
-            unsigned = scan_second(hw, "2 of 2: unsigned PSBT", final=False)
-            if unsigned is None:
-                return "back"
-            psbt = flow.combine(kind, first, unsigned)
-        elif kind == flow.FIRST__UNSIGNED:
-            ui.MessageScreen("PSBT without signatures", "This is the unsigned PSBT. Scan the SIGNED one "
-                             "from Sparrow (after loading what the signer returned).",
-                             heading_color=ui.YELLOW, icon_name="warning").run(hw)
-            return "again"
-        elif kind == flow.FIRST__UNSIGNED_COLDCARD:
-            ui.MessageScreen("1 of 2: unsigned PSBT read",
-                             "Now the signed transaction, from Sparrow (the Q's .txn loaded there).",
-                             buttons=("Scan final transaction",), heading_color=ui.ACCENT,
-                             icon_name="camera").run(hw)
-            final = scan_second(hw, "2 of 2: final transaction", final=True)
-            if final is None:
-                return "back"
-            psbt = flow.combine(kind, psbt, final)
-        working = WorkingScreen(hw)
-        report = flow.check(psbt, session, progress=working, scan_progress=working.scan)
-    except (PSBTError, ValueError) as e:
-        ui.MessageScreen("PSBT not readable", str(e)[:160] + ". Scan it again from Sparrow; if it keeps "
-                         "failing, export the PSBT again.", heading_color=ui.RED, icon_name="x_circle").run(hw)
-        return "again"
-    except Exception as e:
-        logger.exception("verification error")
-        ui.MessageScreen("Verification error", f"{type(e).__name__}: not checked, so not green. The seed "
-                         "stays loaded: try the scan again.", heading_color=ui.RED, icon_name="warning").run(hw)
-        return "again"
-    lock_after_red(session, report)
-    confirmed = False
-    if flow.needs_txid(report):
-        # v7: no green before the txid has been compared with Sparrow's (v7.8: read and
-        # confirm, no quiz on the ending)
-        confirmed = flow.confirm_txid(session, report, TxidCheckScreen(report).run(hw) == "same")
-    while True:
-        choice = ResultScreen(report, session.signer, txid_confirmed=confirmed).run(hw)
-        if choice == "txqr":
-            BroadcastScreen(report).run(hw)
-        elif choice == "details":
-            # v7.9: txid, XFP, inputs, outputs; Finish is here, Back returns to the summary
-            if ResultScreen(report, session.signer, txid_confirmed=confirmed, details=True).run(hw) == "done":
-                return "done"
-        else:
-            return choice
+    def passphrase_question(self, xfp, words):
+        return PassphraseQuestionScreen(xfp, words).run(self.hw)
 
+    def passphrase_keyboard(self, text):
+        return ui.KeyboardScreen(text).run(self.hw)[1]
 
-def scan_second(hw, heading: str, final: bool):
-    """ The second QR of a final transaction + unsigned PSBT pair (v7.2), raw bytes or None """
-    state = {"collector": transport.PSBTCollector(), "result": None}
+    def confirm_passphrase(self, passphrase, xfp):
+        return ConfirmPassphraseScreen(passphrase, xfp).run(self.hw)
 
-    def on_payload(payload):
-        collector = state["collector"]
-        collector.restarted = False
-        collector.add(payload)
-        if collector.complete:
-            state["collector"] = transport.PSBTCollector()         # wrong kind: start clean
-            problem = flow.second_payload_problem(collector.result, final)
-            if problem:
-                raise transport.TransportError(problem)
-            state["result"] = collector.result
-            return True, 1.0, ""
-        return False, collector.progress, "QR of another PSBT: starting over" if collector.restarted else ""
+    def seed_ready(self, xfp, words, has_passphrase, signer, locked):
+        ready = SeedReadyScreen(xfp, words, has_passphrase, signer, locked)
+        return ready.run(self.hw), ready.signer
 
-    if ScanScreen(heading, on_payload, help_topic="scan_psbt").run(hw) is None:
-        return None
-    return state["result"]
+    def message(self, heading, body, tone, icon, buttons=("OK",), values=None, primary=0):
+        return ui.MessageScreen(heading, body, buttons=buttons, heading_color=self.TONES[tone], primary_index=primary,
+                                values=values, icon_name=icon).run(self.hw)
+
+    def working(self):
+        return WorkingScreen(self.hw)
+
+    def txid_check(self, report):
+        return TxidCheckScreen(report).run(self.hw)
+
+    def result(self, report, signer, txid_confirmed, details):
+        return ResultScreen(report, signer, txid_confirmed=txid_confirmed, details=details).run(self.hw)
+
+    def broadcast(self, report):
+        BroadcastScreen(report).run(self.hw)
+
+    def address(self, session):
+        address_flow(self.hw, session)
 
 
 def run(hw, session: Session = None, splash: bool = True):
-    session = session or Session()
-    if splash:
-        SplashScreen().run(hw)              # v7.4: until START
-    while True:
-        if session.master is None:
-            method = HomeScreen().run(hw)
-            try:
-                if not load_seed(hw, session, method):
-                    continue
-            except seedqr.SeedQRError as e:
-                ui.MessageScreen("Seed not valid", str(e), heading_color=ui.RED, icon_name="x_circle").run(hw)
-                continue
-        ready = SeedReadyScreen(session.master.fingerprint.hex(), session.words,
-                                session.has_passphrase, session.signer, session.signer_locked)
-        choice = ready.run(hw)
-        session.choose_signer(ready.signer)
-        if choice == "change_seed":
-            if confirm_wipe(hw):
-                session.wipe()
-            continue
-        if choice == "address":
-            address_flow(hw, session)
-            continue
-        # v7.11: the signer is fixed as soon as a scan starts (flow.Session.lock_signer)
-        if choice != "scan_psbt" or not session.lock_signer():
-            continue
-        while True:
-            outcome = check_psbt(hw, session)
-            if outcome == "again":
-                continue
-            if outcome == "done" and not confirm_wipe(hw):
-                outcome = "keep"             # v7.5: "Finish" asks first; "Keep" goes back to the seed
-            break
-        if outcome == "done":
-            session.wipe()
-            ui.MessageScreen("Seed wiped",
-                             "Seed and passphrase have been removed from the app's memory.\n\n"
-                             "Switch off with the UPS HAT switch: that clears the RAM completely.",
-                             buttons=("Start again",), heading_color=ui.ACCENT, icon_name="lock").run(hw)
+    """ The session on the Seed Max hardware: flow.run() with this module's screens """
+    flow.run(MaxFrontEnd(hw), session, splash, logger)
 
 
 def confirm_wipe(hw) -> bool:
-    """ v7.5: wiping the seed means typing it all again: ask, the destructive choice on the left """
-    choice = ui.MessageScreen("Wipe the seed?", "Seed and passphrase are removed from memory: to check "
-                              "anything else you will load them again.", buttons=("Wipe", "Keep"),
-                              primary_index=1, values=["wipe", "keep"], heading_color=ui.YELLOW,
-                              icon_name="lock").run(hw)
-    return choice == "wipe"
+    return flow.confirm_wipe(MaxFrontEnd(hw))
 
 
 def boot_error(hw, text: str):

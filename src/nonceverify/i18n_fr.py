@@ -423,4 +423,14 @@ BY_ID = {
     "k418": 'CETTE SEED',
     "k419": 'puis',
     "k420": 'sur {0}',
+    # v7.12: classic SeedSigner (240x240, joystick)
+    "k421": 'Checksum faux : choisissez le mot erroné',
+    "k422": 'Joystick : déplacer, appuyer pour choisir. KEY1 : cette page. KEY2 : effacer ou zoom. KEY3 : retour.',
+    "k423": 'TOUCHES',
+    "k424": 'Langue',
+    "k425": 'Hôte',
+    "k426": 'Bougez le joystick pour répondre',
+    "k427": 'appuyez : instructions',
+    "k428": 'les mots apparaissent à quatre ou moins',
+    "k429": "Seed et passphrase ont été retirées de la mémoire de l'application.\n\nDébranchez l'alimentation : cela vide complètement la RAM.",
 }

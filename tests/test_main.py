@@ -13,10 +13,14 @@ sys.path.insert(0, os.path.join(REPO, "src"))
 
 
 def test_main_starts_the_verifier():
+    """ v7.12: the front end of the target this tree builds (target.py): Seed Max or classic """
     import main
-    with patch("nonceverify.app.main") as verifier_main:
+    from nonceverify.target import TARGET, TARGET__CLASSIC
+    with patch("nonceverify.app.main") as max_main, patch("nonceverify.app_classic.main") as classic_main:
         main.main([])
-    verifier_main.assert_called_once_with()
+    started, other = (classic_main, max_main) if TARGET == TARGET__CLASSIC else (max_main, classic_main)
+    started.assert_called_once_with()
+    other.assert_not_called()
 
 
 def test_main_does_not_load_the_signer():
