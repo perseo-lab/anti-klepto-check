@@ -6,8 +6,8 @@
 
 | | |
 |---|---|
-| **Latest** | v7.10, see [Releases](../../releases) |
-| **Runs on** | **[Raspy Max v5](https://github.com/perseo-lab/raspy-max-hardware)**: Raspberry Pi Zero + 3.5" 480×320 touch display + battery + camera (parts list, case and build guide in its repository). A port to standard SeedSigner hardware is planned. |
+| **Latest** | v7.14, see [Releases](../../releases) |
+| **Runs on** | **[Raspy Max v5](https://github.com/perseo-lab/raspy-max-hardware)**: Raspberry Pi Zero + 3.5" 480×320 touch display + battery + camera (parts list, case and build guide in its repository).<br>**Standard SeedSigner** (since v7.12): Raspberry Pi Zero + Waveshare 1.3" 240×240 LCD HAT (joystick and three keys) + camera.<br>One image for each: same code, same checks. |
 | **Signers it checks** | Coldcard Q, SeedSigner, Trezor (any signer with deterministic RFC 6979 nonces, see *Limits*) |
 | **Host** | **Sparrow** (desktop, the main host and the strongest check); Nunchuk (phone) as an alternative |
 | **Languages** | English, Italiano, Français, Español, Deutsch |
@@ -25,7 +25,7 @@ A hardware wallet can be compromised (malicious firmware, supply chain, a coordi
 
 ## What it checks
 
-Anti-Klepto Check boots from its own microSD on a [Raspy Max](https://github.com/perseo-lab/raspy-max-hardware): a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
+Anti-Klepto Check boots from its own microSD on a [Raspy Max](https://github.com/perseo-lab/raspy-max-hardware) or a standard SeedSigner: a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
 
 | Check | How |
 |---|---|
@@ -36,7 +36,7 @@ Anti-Klepto Check boots from its own microSD on a [Raspy Max](https://github.com
 | **Address check / explorer** | is this address in your wallet? (single-sig BIP84/49/44, or a multisig descriptor from your backup) |
 | **Air-gapped** | the microSD is remounted read-only and modules that could write it are blocked by an import guard. Language and host choices live in RAM only. |
 
-The result opens on a one-page summary (where the money goes, the change proven yours, the fee), with every detail one tap away. A **"?"** on every screen explains what to do at that step and why.
+The result names its four checks, each green or not: **Nonce**, **Sighash ALL**, **Txid**, **Change address** (certified: derived from your seed). Then where the money goes, with the whole address, the change and the fee; every detail is one step away. A **"?"** on every screen explains what to do at that step and why. At the end of a session, an invitation to donate shows the signed payment details as QR codes (see *Support the project*).
 
 If everything is green, the device rebuilds the transaction **from the signatures it checked** and shows it as a QR code: you broadcast *that* one from Sparrow (File › Load Transaction › From QR).
 
@@ -53,7 +53,9 @@ The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction
 
 ## Screens
 
-Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screenshots.py), on the same 480×320 canvas, with the test data (the public *abandon … about* test seed).
+Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screenshots.py), on the same canvas as the device, with the test data (the public *abandon … about* test seed).
+
+**Raspy Max** (480×320, touch):
 
 | | | |
 |---|---|---|
@@ -63,6 +65,15 @@ Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screensh
 | The whole txid, to compare with Sparrow | Result: where the money goes, change proven yours | Details |
 | ![Broadcast THIS: the checked transaction as a QR](docs/screenshots/07-broadcast.png) | !["?" help: what to do and why](docs/screenshots/08-help.png) | ![The same result in Italian](docs/screenshots/09-result-italian.png) |
 | Broadcast THIS: the checked transaction as a QR | "?" help: what to do and why | The same result in Italian |
+
+**Standard SeedSigner** (240×240, joystick and three keys; shown at twice the size). The joystick moves, its center chooses; KEY1 opens the "?" page, KEY2 deletes or zooms, KEY3 goes back. A tab beside each key says what it does on that screen.
+
+| | | | |
+|---|---|---|---|
+| ![Splash](docs/screenshots/classic-01-splash.png) | ![Seed words](docs/screenshots/classic-02-seed-words.png) | ![Txid](docs/screenshots/classic-03-txid.png) | ![Result: the four checks](docs/screenshots/classic-04-result-checks.png) |
+| Splash | Seed words, alphabetical | The whole txid; no answer preselected | Result: the four checks |
+| ![Result: the whole address](docs/screenshots/classic-05-result-address.png) | ![Broadcast THIS](docs/screenshots/classic-06-broadcast.png) | ![Support the project](docs/screenshots/classic-07-donate.png) | ![The result in Italian](docs/screenshots/classic-08-result-italian.png) |
+| Scrolling down: the whole address | Broadcast THIS | At the end: support the project | The result in Italian |
 
 ---
 
@@ -77,10 +88,10 @@ Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screensh
 
 ## Status and honesty
 
-- **Experimental software built by one person.** It is tested by the author on his own device with a Coldcard Q and Sparrow. **No human third party has audited it.** Start with a test seed and small amounts.
+- **Experimental software built by one person.** It is tested by the author on his own devices: on the Raspy Max with a Coldcard Q, a Trezor and a SeedSigner as signers and Sparrow as host; on a standard SeedSigner with Sparrow and Nunchuk. **No human third party has audited it.** Start with a test seed and small amounts.
 - **Developed with AI assistance** (Anthropic's Claude). Commits carry `Co-Authored-By` lines. The "independent reviews" mentioned in commit messages were separate AI-agent reviews, adversarial tests and mutation testing, not human audits.
-- The verifier is `src/nonceverify/`. Its cryptography (secp256k1, RFC 6979, BIP32/39, sighash, PSBT and descriptor parsing) is its own code on the Python standard library. The screen is drawn with Pillow; the display, touch and camera drivers are those of the image. `src/main.py` starts the verifier instead of SeedSigner: SeedSigner's signing code is in the tree but never runs.
-- The version numbers continue the history this code grew in: Seed Max v5 → Anti-Klepto Check v7.0 … v7.10.
+- The verifier is `src/nonceverify/`. Its cryptography (secp256k1, RFC 6979, BIP32/39, sighash, PSBT and descriptor parsing) is its own code on the Python standard library. The rules and the order of the steps (what is green, what may be broadcast, what stays red) are in `flow.py`, the same for both devices; each device only draws them (`app.py` for the Raspy Max, `app_classic.py` for the standard SeedSigner). The screen is drawn with Pillow; the display, touch, key and camera drivers are those of the image. `src/main.py` starts the verifier instead of SeedSigner: SeedSigner's signing code is in the tree but never runs, and an import guard keeps it out of the process.
+- The version numbers continue the history this code grew in: Seed Max v5 → Anti-Klepto Check v7.0 … v7.14. One version number is one code: the tag `vX.Y` builds the Raspy Max image, `vX.Y-classic` the standard SeedSigner one, and `git diff vX.Y vX.Y-classic` is a single line (`src/nonceverify/target.py`).
 
 Bug reports are welcome as issues. Report security problems **privately** through [Security › Report a vulnerability](../../security/advisories/new), not in a public issue.
 
@@ -88,7 +99,7 @@ Bug reports are welcome as issues. Report security problems **privately** throug
 
 ## Download and verify
 
-Each [release](../../releases) has the `.img`, `SHA256SUMS` and `SHA256SUMS.asc`.
+Each [release](../../releases) has two images, one for each device (`…-raspy-max-pi0.img`, `…-seedsigner-pi0.img`), `SHA256SUMS` and `SHA256SUMS.asc`. Take the one for your hardware.
 
 ```bash
 # 1. get my key (verify the fingerprint below from at least two places:
@@ -118,10 +129,12 @@ It only reads the two image files: no root rights, nothing mounted, nothing inst
 #    and verify it with SeedSigner's own instructions first
 # 2. this repository at the release tag, with its signature checked
 git clone https://github.com/perseo-lab/anti-klepto-check.git
-git -C anti-klepto-check tag -v v7.10
+git -C anti-klepto-check tag -v v7.14            # standard SeedSigner image: v7.14-classic
 # 3. the audit
-python3 anti-klepto-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-klepto-check-v7.10-pi0.img \
-    --app-tree anti-klepto-check --app-rev v7.10
+python3 anti-klepto-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-klepto-check-v7.14-raspy-max-pi0.img \
+    --app-tree anti-klepto-check --app-rev v7.14
+python3 anti-klepto-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-klepto-check-v7.14-seedsigner-pi0.img \
+    --app-tree anti-klepto-check --app-rev v7.14-classic
 echo "exit status: $?"
 ```
 
@@ -145,10 +158,11 @@ python3 -m venv ~/venv/akc
 
 ### Build from source
 
-The images are built with [SeedSigner OS](https://github.com/SeedSigner/seedsigner-os) (the 0.8.7 checkout), with this repository and the release tag as the app source:
+The images are built with [SeedSigner OS](https://github.com/SeedSigner/seedsigner-os) (the 0.8.7 checkout), with this repository and the release tag as the app source, one build per device:
 
 ```bash
-SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.10" docker compose up --force-recreate --build
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.14" docker compose up --force-recreate --build          # Raspy Max
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.14-classic" docker compose up --force-recreate --build  # standard SeedSigner
 ```
 
 ---
@@ -166,7 +180,7 @@ Ollen_47
 
 ## Support the project
 
-Anti-Klepto Check is free and open source. If it is useful to you, a donation is welcome:
+Anti-Klepto Check is free and open source. If it is useful to you, a donation is welcome. The device shows the same details as QR codes at the end of a session (and this page's link):
 
 - **Lightning**, a **BOLT12 offer**: scan it with Phoenix, Zeus or another BOLT12 wallet.
 - **On-chain**, a **Silent Payments address (BIP 352)**: every payment lands on a fresh Taproot output, so donations can't be linked or counted from outside.

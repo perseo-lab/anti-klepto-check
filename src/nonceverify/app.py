@@ -29,7 +29,7 @@ from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and old
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.13"
+VERSION = "7.14"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -250,7 +250,7 @@ class HomeScreen(ui.Screen):
 
 
 class PassphraseQuestionScreen(ui.Screen):
-    help_topic = "seed"  # v7.9: the "?" page
+    help_topic = "passphrase"  # v7.9: the "?" page
     step = 0
 
     def __init__(self, fingerprint: str, words: int):
@@ -270,7 +270,7 @@ class PassphraseQuestionScreen(ui.Screen):
 
 
 class ConfirmPassphraseScreen(ui.Screen):
-    help_topic = "seed"  # v7.9: the "?" page
+    help_topic = "passphrase"  # v7.9: the "?" page
     step = 0
 
     def __init__(self, passphrase: str, fingerprint: str):
@@ -584,10 +584,12 @@ class ResultScreen(ui.Screen):
     step = 2
     BANNER_H = 62
     SUMMARY_BANNER_H = 40
-    SENDS_CARD = (ui.PAD, ui.HEADER_H + 46, WIDTH - ui.PAD, ui.HEADER_H + 118)
-    CHANGE_CARD = (ui.PAD, ui.HEADER_H + 122, WIDTH - ui.PAD, ui.HEADER_H + 194)
-    FEE_Y = ui.HEADER_H + 208
-    NOTE_Y = ui.HEADER_H + 225
+    # v7.14: the four checks under the banner (Nonce, Sighash ALL, Txid, Change address)
+    CHECKS_ROW = (ui.PAD, ui.HEADER_H + 44, WIDTH - ui.PAD, ui.HEADER_H + 68)
+    SENDS_CARD = (ui.PAD, ui.HEADER_H + 72, WIDTH - ui.PAD, ui.HEADER_H + 135)
+    CHANGE_CARD = (ui.PAD, ui.HEADER_H + 139, WIDTH - ui.PAD, ui.HEADER_H + 202)
+    FEE_Y = ui.HEADER_H + 211
+    NOTE_Y = ui.HEADER_H + 227
 
     def __init__(self, report, signer: str = None, txid_confirmed: bool = False, details: bool = False):
         super().__init__()
@@ -741,7 +743,7 @@ class ResultScreen(ui.Screen):
         label, label_color, sats, lines, outline = card
         x1, y1, x2, y2 = rect
         d.rounded_rectangle(rect, radius=6, fill=ui.PANEL, outline=outline, width=2 if outline != ui.LINE else 1)
-        cy = y1 + 15
+        cy = y1 + 13
         f_unit = ui.font(13, bold=True)
         unit_w = ui.text_width("BTC", f_unit)
         # v7.10: label (and YOURS) shrink to the room the amount leaves
@@ -758,13 +760,43 @@ class ResultScreen(ui.Screen):
             d.text((x2 - 10, cy + 3), "BTC", fill=ui.DIM, font=f_unit, anchor="rm")
             d.text((x2 - 16 - unit_w, cy), btc_amount(sats), fill=ui.TEXT, font=ui.font(24, bold=True, mono=True),
                    anchor="rm")
-        y = y1 + 30
+        y = y1 + 25
         widest = max((t for t, _c, m in lines[:2] if m), key=len, default="")
-        f_mono = ui.fit_font(widest, 17, x2 - x1 - 20, mono=True)      # both address lines one size
+        f_mono = ui.fit_font(widest, 16, x2 - x1 - 20, mono=True)      # both address lines one size
         for text, color, mono in lines[:2]:
-            f = f_mono if mono else ui.fit_font(text, 16, x2 - x1 - 20)
+            f = f_mono if mono else ui.fit_font(text, 15, x2 - x1 - 20)
             d.text((x1 + 10, y), text, fill=color, font=f, anchor="lt")
-            y += 20
+            y += 18
+
+    def draw_checks(self, d):
+        """ v7.14: the four checks as chips, each with its mark; what each means is on the "?" page """
+        rows = flow.checks(self.report, self.txid_confirmed)
+        x1, y1, x2, y2 = self.CHECKS_ROW
+        colors = {flow.LEVEL__GREEN: ui.GREEN, flow.LEVEL__YELLOW: ui.YELLOW, flow.LEVEL__RED: ui.RED,
+                  flow.LEVEL__GREY: ui.DIM}
+        gap, mark = 6, 18
+        size = 15
+        labels = [i18n.Translated(i18n.t(label)) for _c, label, _l, _s in rows]
+        while size > 10 and sum(ui.text_width(lb, ui.font(size, bold=True)) + mark + 16 for lb in labels) + \
+                gap * (len(rows) - 1) > x2 - x1:
+            size -= 1
+        f = ui.font(size, bold=True)
+        widths = [ui.text_width(lb, f) + mark + 16 for lb in labels]
+        spare = (x2 - x1 - sum(widths) - gap * (len(rows) - 1)) / len(rows)
+        x, cy = x1, (y1 + y2) / 2
+        for (_c, _label, level, _s), label, w in zip(rows, labels, widths):
+            color = colors[level]
+            w += spare
+            d.rounded_rectangle((x, y1, x + w, y2), radius=5, fill=ui.PANEL, outline=color, width=2)
+            mx = x + 8 + mark / 2
+            if level == flow.LEVEL__GREEN:
+                check_mark(d, mx, cy, 7, color)
+            elif level == flow.LEVEL__GREY:
+                d.ellipse((mx - 7, cy - 7, mx + 7, cy + 7), outline=color, width=2)
+            else:
+                ui.icon(d, "warning", (mx, cy), 15, color)
+            d.text((x + 8 + mark + 4, cy), label, fill=ui.TEXT, font=f, anchor="lm")
+            x += w + gap
 
     def draw_summary(self, d):
         color, icon_name, headline, subline = self.summary_banner()
@@ -777,6 +809,7 @@ class ResultScreen(ui.Screen):
         room = WIDTH - 2 * ui.PAD - 34 - head_w - 12
         d.text((WIDTH - ui.PAD, top + h / 2 + 1), subline, fill=ui.BACKGROUND,
                font=ui.fit_font(subline, 14, room, bold=True, smallest=9), anchor="rm")
+        self.draw_checks(d)
         sends, change = self.card_texts()
         self.draw_card(d, self.SENDS_CARD, sends)
         self.draw_card(d, self.CHANGE_CARD, change, yours=change[0] == "CHANGE" and change[2] is not None)
@@ -786,7 +819,7 @@ class ResultScreen(ui.Screen):
         note, note_color = self.summary_note()
         if note:
             d.text((WIDTH / 2, self.NOTE_Y), note, fill=note_color,
-                   font=ui.fit_font(note, 14, WIDTH - 2 * ui.PAD, smallest=9), anchor="mm")
+                   font=ui.fit_font(note, 13, WIDTH - 2 * ui.PAD, smallest=9), anchor="mm")
 
     def draw(self, d, image):
         if self.summary:
@@ -1117,7 +1150,7 @@ def short_address(text: str, f, width: int) -> str:
     return " ".join(groups[:4]) + " … " + " ".join(groups[-2:])
 
 
-def checked_qr(data: str, size: int):
+def checked_qr(data: str, size: int, low_ecc: bool = False):
     """
     A QR code of `data` at most `size` pixels wide, or None. Made with the `qrcode`
     package that SeedSigner OS ships (public data only), then read back with the same
@@ -1127,7 +1160,9 @@ def checked_qr(data: str, size: int):
     try:
         import qrcode
         from PIL import Image
-        q = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=2, box_size=1)
+        # v7.14: low_ecc (L) for long public data on a small screen (the donation offer): bigger modules
+        level = qrcode.constants.ERROR_CORRECT_L if low_ecc else qrcode.constants.ERROR_CORRECT_M
+        q = qrcode.QRCode(error_correction=level, border=2, box_size=1)
         q.add_data(data)
         q.make(fit=True)
         modules = q.make_image(fill_color="black", back_color="white").convert("RGB")
@@ -1471,6 +1506,66 @@ def address_flow(hw, session):
 # ---------------------------------------------------------------------------------------
 # The flow
 # ---------------------------------------------------------------------------------------
+class DonateScreen(ui.Screen):
+    """
+    v7.14: the invitation to donate at the end of a session, as on the Seed Max (Donate):
+    the project page with the signed details, the Lightning BOLT12 offer, the Silent
+    Payments address. Each one a QR read back before it is shown; the details come from
+    donate.py, checked by a test against the signed docs/DONATE.txt.asc.
+    """
+    help_topic = "donate"
+    QR_BOX = 232
+    TABS = ("GitHub", "Lightning", "On-chain")
+
+    def __init__(self):
+        super().__init__()
+        from nonceverify import donate
+        self.pages = donate.pages()
+        self.qrs = [checked_qr(payload, self.QR_BOX, low_ecc=True) for _t, _k, payload, _s in self.pages]
+        self.page = 0
+        self.make_buttons()
+
+    def make_buttons(self):
+        self.buttons = ui.bottom_row(list(self.TABS) + ["Done"], primary_index=self.page,
+                                     values=[("page", i) for i in range(len(self.TABS))] + ["done"],
+                                     icons=[None, None, None, "check"])
+
+    def draw(self, d, image):
+        title, _kind, _payload, sub = self.pages[self.page]
+        top = ui.HEADER_H + 6
+        box = self.QR_BOX
+        bottom = HEIGHT - ui.BUTTON_H - 2 * ui.PAD
+        box = min(box, bottom - top)
+        qx = WIDTH - ui.PAD - box
+        d.rectangle((qx, top, qx + box, top + box), fill=(255, 255, 255))
+        qr = self.qrs[self.page]
+        if qr is not None:
+            image.paste(qr, (qx + (box - qr.size[0]) // 2, top + (box - qr.size[1]) // 2))
+        else:
+            d.text((qx + box / 2, top + box / 2), "QR not available", fill=ui.RED, font=ui.font(16, bold=True),
+                   anchor="mm")
+        width = qx - 2 * ui.PAD
+        ui.icon(d, "heart", (ui.PAD + 12, top + 14), 22, ui.ACCENT)
+        d.text((ui.PAD + 30, top + 14), title, fill=ui.ACCENT,
+               font=ui.fit_font(title, 20, width - 30, bold=True, smallest=14), anchor="lm")
+        y = ui.paragraph(d, "Free and open source. If it helped you, a donation keeps it going.", top + 36,
+                         size=16, width=width, max_lines=5)
+        y = ui.paragraph(d, sub if self.page else "signed details: verify them on the page", y + 8, size=15,
+                         color=ui.DIM, width=width, max_lines=3)
+        if self.page == 0:
+            for i, part in enumerate(("github.com/perseo-lab/", "anti-klepto-check")):
+                d.text((ui.PAD, y + 6 + i * 18), i18n.Translated(part), fill=ui.TEXT,
+                       font=ui.fit_font(i18n.Translated(part), 15, width, mono=True, smallest=11))
+
+    def on_event(self, event):
+        value = super().on_event(event)
+        if isinstance(value, tuple) and value[0] == "page":
+            self.page = value[1]
+            self.make_buttons()
+            return "__redraw__"
+        return value
+
+
 class MaxFrontEnd:
     """
     v7.12: the steps of flow.run() drawn on the Seed Max hardware (480x320 touch). Each
@@ -1524,6 +1619,9 @@ class MaxFrontEnd:
 
     def address(self, session):
         address_flow(self.hw, session)
+
+    def donate(self):
+        DonateScreen().run(self.hw)
 
 
 def run(hw, session: Session = None, splash: bool = True):

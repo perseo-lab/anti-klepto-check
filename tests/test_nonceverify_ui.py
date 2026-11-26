@@ -118,6 +118,7 @@ class FakeHardware:
 LEFT = ("tap", 122, 288)
 RIGHT = ("tap", 357, 288)
 FULL = ("tap", 240, 288)
+DONATE_DONE = ("tap", 420, 288)               # v7.14: after "Seed wiped", the donation: Done (rightmost)
 MIDDLE = FULL                               # middle of three bottom buttons ("Address" on the seed screen)
 SAME_TXID = RIGHT                           # v7: the txid step before every green
 WIPE = LEFT                                 # v7.5: confirm_wipe, "Wipe" on the left ("Keep" right)
@@ -225,7 +226,7 @@ def test_full_flow_ok():
     script += [RIGHT, ("blank",)] + ur_parts(psbt.serialize())
     script += [SAME_TXID, ("shot", "07_result_ok"), ("swipe_up",), ("swipe_up",), ("swipe_up",), ("shot", "08_result_ok_scrolled")]
     script += [DETAILS, ("shot", "08b_details"), FINISH, WIPE, ("shot", "09_seed_wiped"), FULL,
-               ("shot", "10_home_again"), ("stop",)]
+               ("shot", "09b_donate"), DONATE_DONE, ("shot", "10_home_again"), ("stop",)]
     hw = FakeHardware(script)
     with pytest.raises(Stop):
         app.run(hw)
@@ -362,7 +363,7 @@ def test_scan_needs_a_signer_after_every_seed_load():
     script = load_seed_script(shots=False)
     script += [RIGHT, ("shot", "18_must_choose")]                 # nothing chosen: stays here
     script += SEEDSIGNER + [RIGHT, ("blank",)] + ur_parts(psbt.serialize()) + [SAME_TXID, ("shot", "19_green")]
-    script += [DETAILS, FINISH, WIPE, FULL]                       # v7.9: Details, Finish, Wipe: seed wiped, home
+    script += [DETAILS, FINISH, WIPE, FULL, DONATE_DONE]          # v7.9: Details, Finish, Wipe: seed wiped; donation
     script += load_seed_script(shots=False)[1:] + [RIGHT, ("shot", "20_must_choose_again"), ("stop",)]
     hw = FakeHardware(script)
     with pytest.raises(Stop):
@@ -399,7 +400,7 @@ def test_the_signer_cannot_change_within_a_seed_session(monkeypatch):
     script += TREZOR + TREZOR + [("shot", "22_locked")]
     script += [RIGHT, ("blank",)] + ur_parts(psbt.serialize()) + [("shot", "23_same_tx_red")]
     script += [RIGHT, ("blank",)] + ur_parts(second.serialize()) + [("shot", "24_next_tx_red")]
-    script += [LEFT, WIPE, FULL] + load_seed_script(shots=False)[1:] + TREZOR
+    script += [LEFT, WIPE, FULL, DONATE_DONE] + load_seed_script(shots=False)[1:] + TREZOR
     script += [RIGHT, ("blank",)] + ur_parts(second.serialize()) + [("shot", "25_new_session"), ("stop",)]
     hw = FakeHardware(script)
     with pytest.raises(Stop):

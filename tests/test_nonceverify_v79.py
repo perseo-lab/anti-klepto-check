@@ -63,10 +63,12 @@ def test_green_opens_on_the_summary():
 
 def test_summary_regions_do_not_overlap():
     R = app.ResultScreen
-    assert ui.HEADER_H + R.SUMMARY_BANNER_H < R.SENDS_CARD[1] < R.SENDS_CARD[3] < R.CHANGE_CARD[1] < R.CHANGE_CARD[3]
+    # v7.14: the four checks between the banner and the cards
+    assert ui.HEADER_H + R.SUMMARY_BANNER_H < R.CHECKS_ROW[1] < R.CHECKS_ROW[3] < R.SENDS_CARD[1]
+    assert R.SENDS_CARD[1] < R.SENDS_CARD[3] < R.CHANGE_CARD[1] < R.CHANGE_CARD[3]
     assert R.CHANGE_CARD[3] < R.FEE_Y - 8 and R.FEE_Y + 8 < R.NOTE_Y - 7 and R.NOTE_Y + 8 < BUTTONS_TOP
     for card in (R.SENDS_CARD, R.CHANGE_CARD):
-        assert card[1] + 30 + 2 * 20 <= card[3] + 2, "two text lines fit in the card"
+        assert card[1] + 25 + 18 + 16 <= card[3] - 3, "two text lines fit in the card, clear of its border"
 
 
 @pytest.mark.parametrize("address_text", [

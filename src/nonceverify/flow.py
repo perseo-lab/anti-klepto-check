@@ -43,6 +43,7 @@ GRINDING_SHORT = {GRIND__LIBSECP: "libsecp", GRIND__EMBIT: "embit", GRIND__NONE:
 LEVEL__GREEN = "green"
 LEVEL__YELLOW = "yellow"
 LEVEL__RED = "red"
+LEVEL__GREY = "grey"                   # v7.14: nothing to check (no change)
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -324,6 +325,49 @@ def summary_note(report):
     return None, None
 
 
+# v7.14: the four checks behind a clean result, each one named on the result screen (as
+# the txid always was): what was verified, not only the verdict.
+CHECK__NONCE = "nonce"
+CHECK__SIGHASH = "sighash"
+CHECK__TXID = "txid"
+CHECK__CHANGE = "change"
+
+
+def checks(report, txid_confirmed: bool):
+    """
+    [(check, label, level, status)] for a result shown as a summary (shows_summary): a red
+    is a list with the reason, not a checklist. The levels never contradict the banner:
+      Nonce    every signature of this seed with its RFC 6979 nonce (green); this seed only,
+               cosigners still to check or not fully signed (yellow)
+      Sighash  every signature in the PSBT, cosigners' included, SIGHASH_ALL, strict DER,
+               low S: anything else makes the result red, so here it is always green
+      Txid     the user said it is the host's (green); not confirmed (yellow)
+      Change   the change address derived here from the seed or the confirmed descriptor
+               (green "certified"); certified but where a wallet may not look (yellow);
+               not provable (yellow, no Broadcast); no change (grey)
+    """
+    if report.verdict == VERDICT__OK:
+        nonce = ("Nonce", LEVEL__GREEN, "RFC 6979, every signature of this seed")
+    elif report.unchecked_cosigners:
+        nonce = ("Nonce", LEVEL__YELLOW, "this seed clean: cosigners still to check")
+    else:
+        nonce = ("Nonce", LEVEL__YELLOW, "this seed clean: not fully signed yet")
+    sighash = ("Sighash ALL", LEVEL__GREEN, "every signature, cosigners included")
+    txid = ("Txid", LEVEL__GREEN, "compared and confirmed by you") if txid_confirmed else \
+        ("Txid", LEVEL__YELLOW, "not compared yet")
+    external, ours, unverified = outputs_by_owner(report)
+    if unverified:
+        change = ("Change address", LEVEL__YELLOW, "NOT certified: not proven yours")
+    elif ours and any(o.note for o in ours):
+        change = ("Change address", LEVEL__YELLOW, "certified yours, in an unusual place")
+    elif ours:
+        change = ("Change address", LEVEL__GREEN, "certified: derived from your seed")
+    else:
+        change = ("Change address", LEVEL__GREY, "no change in this transaction")
+    return [(CHECK__NONCE,) + nonce, (CHECK__SIGHASH,) + sighash, (CHECK__TXID,) + txid,
+            (CHECK__CHANGE,) + change]
+
+
 # Actions on the result: what each button returns to the flow
 ACTION__DETAILS = "details"
 ACTION__BROADCAST = "txqr"
@@ -452,6 +496,7 @@ def indexed(explorer) -> bool:
 #   result(report, signer, txid_confirmed, details) -> one of the ACTION__ values
 #   broadcast(report)
 #   address(session)                          optional: the address checks (v7)
+#   donate()                                  optional: the invitation to donate, after the wipe (v7.14)
 #   error(exception)                          an unexpected error, the seed kept
 TONE__ACCENT = "accent"
 SWITCH_OFF__UPS_HAT = "Switch off with the UPS HAT switch: that clears the RAM completely."
@@ -644,3 +689,6 @@ def run(fe, session: Session = None, splash: bool = True, log=None):
             # how the power goes off depends on the hardware: the front end says it
             fe.message("Seed wiped", "Seed and passphrase have been removed from the app's memory.\n\n"
                        + getattr(fe, "SWITCH_OFF", SWITCH_OFF__UPS_HAT), TONE__ACCENT, "lock", buttons=("Start again",))
+            # v7.14: at the end of a session, the invitation to donate (signed details, QR only)
+            if hasattr(fe, "donate"):
+                fe.donate()

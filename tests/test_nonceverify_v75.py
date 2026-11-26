@@ -200,8 +200,8 @@ def test_two_seeds_in_one_power_on_make_the_multisig_green():
     parts = ur_parts(psbt.serialize())
     script_ = load_seed_script(shots=False) + SEEDSIGNER + [RIGHT, ("blank",)] + parts
     script_ += [SAME_TXID, ("shot", "95_this_seed_clean"), DETAILS, FINISH, WIPE]   # v7.9: Details, Finish, Wipe
-    from test_nonceverify_ui import TYPE_SEED, WORDS_12, type_word
-    script_ += [FULL, TYPE_SEED, WORDS_12]
+    from test_nonceverify_ui import DONATE_DONE, TYPE_SEED, WORDS_12, type_word
+    script_ += [FULL, DONATE_DONE, TYPE_SEED, WORDS_12]                                 # v7.14: the donation
     for w in SEED_B.split():
         script_ += type_word(w)
     script_ += [RIGHT, LEFT] + SEEDSIGNER + [RIGHT, ("blank",)] + parts                    # Confirm, None

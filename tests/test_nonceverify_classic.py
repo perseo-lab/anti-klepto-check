@@ -202,11 +202,14 @@ def test_full_flow_green_broadcast_details_finish():
                PRESS, ("shot", "12_broadcast_qr"), PRESS, ("shot", "13_broadcast_how"),
                KEY3, LEFT, ("shot", "14_result_details_selected"), PRESS, ("shot", "15_details"), DOWN, DOWN,
                ("shot", "16_details_scrolled"), LEFT, PRESS, ("shot", "17_wipe"), LEFT, PRESS,
-               ("shot", "18_seed_wiped"), PRESS, ("shot", "19_home_again")]
+               ("shot", "18_seed_wiped"), PRESS, ("shot", "18b_donate_page"), RIGHT, ("shot", "18c_donate_lightning"),
+               RIGHT, ("shot", "18d_donate_sp"), PRESS, ("shot", "19_home_again")]
     hw = run(script)
     assert hw.shots["09_txid"].tobytes() == hw.shots["09b_txid_push_ignored"].tobytes(), \
         "a push before moving the joystick answers nothing"
     assert banner(hw.shots["11_result_green"]) == u.GREEN
+    for name in ("18b_donate_page", "18c_donate_lightning", "18d_donate_sp"):
+        assert ac.decode_qr(hw.shots[name]) is not None, f"{name}: the QR reads"
     assert banner(hw.shots["15_details"]) == u.GREEN
 
 
@@ -376,8 +379,8 @@ def unusual_change_report():
     return report
 
 
-def test_every_classic_screen_fits_and_is_translated(monkeypatch):
-    """ Every screen, every language and host: 240x240, nothing off the screen, nothing left in English """
+def screens():
+    """ (name, render) of every classic screen, with the test data (also used by tools/akc_screenshots.py) """
     from test_nonceverify_v79 import green_report
     import test_nonceverify_v79 as v79
     from dataclasses import replace
@@ -396,7 +399,7 @@ def test_every_classic_screen_fits_and_is_translated(monkeypatch):
     red.tx_problem = "The txid is NOT the one in Sparrow: the transaction checked here is not the one Sparrow would " \
                      "broadcast. Do not broadcast."
 
-    def screens():
+    def _screens():
         yield "splash", lambda: ac.SplashScreen().render()
         yield "home", lambda: ac.HomeScreen().render()
         yield "count", lambda: wc.WordCountScreen().render()
@@ -412,12 +415,19 @@ def test_every_classic_screen_fits_and_is_translated(monkeypatch):
         yield "txid", lambda: ac.TxidCheckScreen(report).render()
         for name, rep in (("green", report), ("self", self_send), ("several", several), ("unverified", unverified),
                           ("unusual", unusual)):
-            for page in (0, 1):
-                def summary(rep=rep, page=page):
+            for end in (False, True):
+                def summary(rep=rep, end=end):
                     screen = ac.ResultScreen(rep, "coldcard_q", True)
-                    screen.page = page
+                    screen.offset = screen.max_offset() if end else 0
                     return screen.render()
-                yield f"result {name} {page}", summary
+                yield f"result {name} {'end' if end else 'top'}", summary
+
+            def to_address(rep=rep):
+                screen = ac.ResultScreen(rep, "coldcard_q", True)
+                screen.summary_sheet()
+                screen.offset = min(screen.max_offset(), screen.sends_top - 2)
+                return screen.render()
+            yield f"result {name} address", to_address
         yield "details", lambda: ac.ResultScreen(report, "coldcard_q", True, details=True).render()
         yield "red", lambda: ac.ResultScreen(red, "coldcard_q", False).render()
         yield "broadcast", lambda: ac.BroadcastScreen(report).render()
@@ -429,10 +439,22 @@ def test_every_classic_screen_fits_and_is_translated(monkeypatch):
         yield "message", lambda: u.MessageScreen("Wipe the seed?", "Seed and passphrase are removed from memory: to "
                                                  "check anything else you will load them again.", buttons=("Wipe", "Keep"),
                                                  values=["wipe", "keep"], primary_index=1).render()
+        for page in range(3):
+            def donate_page(page=page):
+                screen = ac.DonateScreen()
+                screen.page = page
+                return screen.render()
+            yield f"donate {page}", donate_page
         yield "wiped", lambda: u.MessageScreen("Seed wiped", "Seed and passphrase have been removed from the app's "
                                                "memory.\n\n" + ac.ClassicFrontEnd.SWITCH_OFF,
                                                buttons=("Start again",)).render()
 
+
+    return _screens()
+
+
+def test_every_classic_screen_fits_and_is_translated(monkeypatch):
+    """ Every screen, every language and host: 240x240, nothing off the screen, nothing left in English """
     orig_draw, orig_tr = ui.Draw.text, i18n._translate
     for lang in [c for c, _n in i18n.LANGUAGES]:
         for host in [c for c, _n in i18n.HOSTS]:
@@ -491,3 +513,37 @@ def test_target_selects_the_front_end(monkeypatch):
     classic_main.assert_called_once_with()
     max_main.assert_not_called()
     assert target.TARGET__MAX == "max"
+
+
+def test_donation_details_are_the_signed_ones():
+    """ donate.py says what docs/DONATE.txt.asc, signed by the author, says """
+    from nonceverify import donate
+    signed = open(os.path.join(REPO, "docs", "DONATE.txt.asc"), encoding="utf-8").read()
+    body = signed.split("-----BEGIN PGP SIGNATURE-----")[0]
+    assert donate.BOLT12_OFFER in body.split()
+    assert donate.SILENT_PAYMENT in body.split()
+    assert donate.AUTHOR_KEY in body
+    assert donate.PAGE_URL.startswith("https://github.com/perseo-lab/anti-klepto-check#")
+    for _title, _kind, payload, _sub in donate.pages():
+        assert app.checked_qr(payload, ac.DonateScreen.QR_BOX, low_ecc=True) is not None, "every donation QR reads back"
+        assert app.checked_qr(payload, app.DonateScreen.QR_BOX, low_ecc=True) is not None
+
+
+def test_checks_name_what_was_verified():
+    from test_nonceverify_v79 import green_report
+    import test_nonceverify_v79 as v79
+    report = green_report()
+    rows = {c: (label, level) for c, label, level, _s in flow.checks(report, True)}
+    assert rows[flow.CHECK__NONCE][1] == rows[flow.CHECK__SIGHASH][1] == rows[flow.CHECK__TXID][1] == flow.LEVEL__GREEN
+    assert rows[flow.CHECK__CHANGE] == ("Change address", flow.LEVEL__GREEN)
+    unverified = v79.verify_psbt(v79.parse_psbt(v79._multisig_spend(xpubs=False).serialize()), v79.master(),
+                                 grinding="embit")
+    assert dict((c, lv) for c, _l, lv, _s in flow.checks(unverified, True))[flow.CHECK__CHANGE] == flow.LEVEL__YELLOW
+    assert dict((c, lv) for c, _l, lv, _s in flow.checks(unusual_change_report(), True))[flow.CHECK__CHANGE] == \
+        flow.LEVEL__YELLOW
+    # the summary scrolls from the checks down to the fee
+    screen = ac.ResultScreen(report, "seedsigner", True)
+    top = screen.render()
+    assert screen.max_offset() > 0
+    screen.on_event(Event(Event.DOWN))
+    assert screen.offset > 0 and screen.render().tobytes() != top.tobytes()

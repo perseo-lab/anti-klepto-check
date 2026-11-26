@@ -16,6 +16,7 @@ CLASSIC_TEXTS = {
                        "3. Compare the txid, read the result, choose Broadcast and load that QR in Sparrow.",
     ("txid", "DO"): "In Sparrow, the transaction tab shows the Transaction ID. Compare all four rows with this "
                     "screen. Same: choose Same txid. Different: choose Different.",
+    ("signer", "NEXT"): "Scan PSBT: the signed transaction, from Sparrow. Change seed wipes this seed to load another (multisig: a cosigner's).",
     ("result", "GREEN"): "Every signature of this seed uses the nonce it had to use, sighash ALL, low S, and the txid "
                          "is Sparrow's. Choose Broadcast.",
 }
@@ -30,11 +31,13 @@ class HelpScreen(u.Screen):
         self.title_text, sections = guide.TOPICS[topic]
         lines = []
         width = u.RIGHT - u.PAD - 6
-        for name, text in [("KEYS", KEYS_TEXT)] + list(sections):
+        # v7.14: what the keys do, on the first pages only (start, home); the others go straight to the point
+        keys = [("KEYS", KEYS_TEXT)] if topic in ("start", "home") else []
+        for name, text in keys + list(sections):
             text = CLASSIC_TEXTS.get((topic, name), text)
-            lines.append((name, u.ACCENT, 13, True))
-            for line in u.wrap(text, u.font(15), width):
-                lines.append((line, u.TEXT, 15, False))
+            lines.append((name, u.ACCENT, 14, True))
+            for line in u.wrap(text, u.font(16), width):
+                lines.append((line, u.TEXT, 16, False))
             lines.append(("", u.TEXT, 1, False))
         self.list = u.ScrollList(lines, u.TOP + 26, HEIGHT - 4)
         self.selected = None

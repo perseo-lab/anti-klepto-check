@@ -239,4 +239,4 @@ def test_steps_shrink_but_never_reach_the_help_button(monkeypatch):
 
 
 def test_version():
-    assert app.VERSION == "7.13"
+    assert app.VERSION == "7.14"

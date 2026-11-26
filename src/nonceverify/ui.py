@@ -43,6 +43,7 @@ ICONS = {
     "power": "", "back": "", "erase": "", "lock": "",
     "fingerprint": "", "ok_circle": "", "x_circle": "",
     "keyboard": "",
+    "heart": "",                  # v7.14: the donation
 }
 
 STEPS = ["SEED", "PSBT", "RESULT"]

@@ -84,6 +84,7 @@ def splash_background():
 
 
 class SplashScreen(u.Screen):
+    help_topic = "start"                           # v7.14
     """
     The tool's name, unmistakably not SeedSigner; language and host (RAM only, as on the
     Seed Max: English and Sparrow again at power-on); START. UP/DOWN move between the three
@@ -192,7 +193,7 @@ class HomeScreen(u.Screen):
 
 
 class PassphraseQuestionScreen(u.Screen):
-    help_topic = "seed"
+    help_topic = "passphrase"
     step = 0
 
     def __init__(self, fingerprint: str, words: int):
@@ -215,7 +216,7 @@ class PassphraseQuestionScreen(u.Screen):
 
 
 class ConfirmPassphraseScreen(u.Screen):
-    help_topic = "seed"
+    help_topic = "passphrase"
     step = 0
 
     def __init__(self, passphrase: str, fingerprint: str):
@@ -565,8 +566,9 @@ class ResultScreen(u.Screen):
         actions, primary = flow.result_actions(report, txid_confirmed, self.summary, details)
         self.bar = u.ActionBar([a[0] for a in actions], [a[1] for a in actions], primary or 0)
         self.selected = None
-        self.page = 0
+        self.offset = 0
         self.list = None if self.summary else u.ScrollList(self.lines(), self.LIST_TOP, self.bar.rect[1] - 4)
+        self.sheet = None                          # v7.14: the summary, drawn once, scrolled
 
     def banner(self):
         if self.summary or (self.details and self.report.verdict == VERDICT__OK and self.txid_confirmed):
@@ -661,18 +663,6 @@ class ResultScreen(u.Screen):
             sub = [i18n.Translated(sub[0].rstrip(":,. ") + "…")]
         d.text((u.PAD + 24, y1 + 27), sub[0], fill=u.BACKGROUND, font=u.font(13, bold=True), anchor="lm")
 
-    def amount_row(self, d, y, label, label_color, sats, yours=False):
-        x1, x2 = u.PAD, u.RIGHT
-        f_label = u.font(u.SMALL, bold=True)
-        d.text((x1 + 6, y), label, fill=label_color, font=u.fit_font(label, u.SMALL, 96, bold=True, smallest=11),
-               anchor="lm")
-        if yours:
-            x = x1 + 6 + u.text_width(label, f_label) + 11
-            u.check_mark(d, x, y, 6, u.GREEN)
-        if sats is not None:
-            d.text((x2 - 6, y + 1), "BTC", fill=u.DIM, font=u.font(12, bold=True), anchor="rm")
-            d.text((x2 - 36, y), btc_amount(sats), fill=u.TEXT, font=u.font(17, bold=True, mono=True), anchor="rm")
-
     def change_card(self):
         """ (label, label color, sats, [(line, color)], outline, yours): the Seed Max card, its texts """
         external, ours, unverified = flow.outputs_by_owner(self.report)
@@ -694,75 +684,134 @@ class ResultScreen(u.Screen):
             return "CHANGE", u.GREEN, sum(x.amount for x in ours), lines, u.LINE, True
         return "CHANGE", u.DIM, None, [("no change back to this wallet", u.DIM)], u.LINE, False
 
-    def draw_summary(self, d):
+    def view(self):
+        """ (top, bottom) of the area the summary scrolls in, between the banner and the bar """
+        return self.BANNER[1] + 3, self.bar.rect[1] - 3
+
+    def summary_sheet(self):
+        """
+        v7.14: the summary as one tall page, scrolled with UP/DOWN: first the four checks
+        (Nonce, Sighash ALL, Txid, Change address), then where the money goes with the
+        WHOLE address, the change, the fee. Drawn once per screen; each card is measured
+        first, then drawn: its panel, then its text.
+        """
+        if self.sheet is not None:
+            return self.sheet
+        from PIL import Image
         r = self.report
-        external, ours, unverified = flow.outputs_by_owner(r)
+        image = Image.new("RGB", (WIDTH, 720), u.BACKGROUND)
+        d = u.ui.Draw(image)
         x1, x2 = u.PAD, u.RIGHT
-        top = self.BANNER[1] + 6
-        bottom = self.bar.rect[1] - 26
-        width = x2 - x1 - 12
-        if self.page == 0:
-            u.panel(d, (x1, top, x2, bottom))
-            self.amount_row(d, top + 13, "SENDS TO", u.TEXT, sum(o.amount for o in external) if external else 0)
-            y = top + 30
-            if len(external) == 1:
-                rows = [i18n.Translated(row) for row in address_groups(external[0].address, 4)]
-                f = u.fit_font(max(rows, key=len), 20, width, mono=True, smallest=15)
-                for row in rows[:4]:
-                    d.text((x1 + 6, y), row, fill=u.TEXT, font=f)
-                    y += 22
-            elif external:
-                u.paragraph(d, f"{len(external)} addresses: each one in Details", y, size=u.BODY, x=x1 + 6, width=width,
-                            max_lines=3)
+        inner = x2 - x1 - 12
+        f_small, f_text = u.font(u.SMALL), u.font(u.SMALL + 1)
+        levels = {flow.LEVEL__GREEN: u.GREEN, flow.LEVEL__YELLOW: u.YELLOW, flow.LEVEL__RED: u.RED,
+                  flow.LEVEL__GREY: u.DIM}
+
+        # 1. the checks
+        rows = [(label, level, u.wrap(status, f_small, inner - 24)[:2])
+                for _check, label, level, status in flow.checks(r, self.txid_confirmed)]
+        top = 2
+        bottom = top + 6 + sum(22 + len(lines) * (u.SMALL + 3) + 6 for _l, _v, lines in rows)
+        u.panel(d, (x1, top, x2, bottom))
+        y = top + 6
+        for label, level, lines in rows:
+            color, cy = levels[level], y + 10
+            if level == flow.LEVEL__GREEN:
+                u.check_mark(d, x1 + 14, cy, 8, color)
+            elif level == flow.LEVEL__GREY:
+                d.ellipse((x1 + 6, cy - 8, x1 + 22, cy + 8), outline=color, width=2)
             else:
-                # the Seed Max texts, line by line (translated one by one)
-                # the Seed Max texts (two keys, translated one by one), wrapped at a readable size
-                text = i18n.Translated(i18n.t("no other address: it all stays in") + " " + i18n.t("this wallet"))
-                u.paragraph(d, text, y - 4, size=u.BODY, color=u.DIM, x=x1 + 6, width=width, max_lines=4, line_gap=3)
-            hint = "change and fee"
+                u.icon(d, "warning", (x1 + 14, cy), 17, color)
+            d.text((x1 + 30, cy), label, fill=u.TEXT,
+                   font=u.fit_font(label, u.BODY, inner - 24, bold=True, smallest=13), anchor="lm")
+            y += 22
+            for line in lines:
+                d.text((x1 + 30, y), line, fill=u.DIM if level == flow.LEVEL__GREEN else color, font=f_small)
+                y += u.SMALL + 3
+            y += 6
+
+        # 2. where the money goes: the amount and the WHOLE address
+        external, ours, unverified = flow.outputs_by_owner(r)
+        if len(external) == 1:
+            rows_ = [i18n.Translated(row) for row in address_groups(external[0].address, 4)]
+            f_addr = u.fit_font(max(rows_, key=len), 21, inner, mono=True, smallest=16)
+            body, line_h, color = rows_, 24, u.TEXT
         else:
-            label, lcolor, sats, lines, outline, yours = self.change_card()
-            u.panel(d, (x1, top, x2, top + 84), outline=outline, width=1 if outline == u.LINE else 2)
-            self.amount_row(d, top + 13, label, lcolor, sats, yours=yours)
-            y = top + 28
-            for text, color in lines:
-                for line in u.wrap(text, u.font(u.SMALL + 1), width)[:3 if len(lines) == 1 else 2]:
-                    d.text((x1 + 6, y), line, fill=color, font=u.font(u.SMALL + 1))
-                    y += 18
-            y = top + 97
-            fee = btc(r.fee)
-            d.text((x1 + 2, y), "Fee", fill=u.DIM, font=u.fit_font("Fee", u.SMALL, x2 - x1 - 130, smallest=11),
-                   anchor="lm")
-            d.text((x2, y), fee, fill=u.TEXT, font=u.font(u.SMALL, mono=True), anchor="rm")
-            note, level = flow.summary_note(r)
-            if note:
-                u.paragraph(d, note, y + 9, size=u.SMALL, color=LEVEL_COLORS[level], max_lines=2, line_gap=1)
-            hint = None
-        # which page: two dots on the left edge, the upper one is the address
-        for i in range(2):
-            cy = top + 34 + i * 12
-            r_ = 2.5 if i == self.page else 1.8
-            d.ellipse((1.5 - r_ + 1, cy - r_, 1.5 + r_ + 1, cy + r_), fill=u.ACCENT if i == self.page else u.LINE)
-        if hint:
-            hy = self.bar.rect[1] - 12
-            d.polygon(((x1 + 2, hy - 4), (x1 + 12, hy - 4), (x1 + 7, hy + 3)), fill=u.ACCENT)
-            d.text((x1 + 18, hy), hint, fill=u.ACCENT, font=u.fit_font(hint, u.SMALL, x2 - x1 - 20, smallest=11),
-                   anchor="lm")
+            text = f"{len(external)} addresses: each one in Details" if external else \
+                i18n.Translated(i18n.t("no other address: it all stays in") + " " + i18n.t("this wallet"))
+            f_addr, line_h, color = u.font(u.BODY), u.BODY + 3, u.TEXT if external else u.DIM
+            body = u.wrap(text, f_addr, inner)[:4]
+        top = bottom + 8
+        self.sends_top = top                       # where the address card starts (scrolling to it)
+        bottom = top + 32 + len(body) * line_h + 4
+        u.panel(d, (x1, top, x2, bottom))
+        self.amount_text(d, top + 14, "SENDS TO", u.TEXT, sum(o.amount for o in external) if external else 0)
+        y = top + 30
+        for line in body:
+            d.text((x1 + 6, y), line, fill=color, font=f_addr)
+            y += line_h
+
+        # 3. the change
+        label, lcolor, sats, lines, outline, yours = self.change_card()
+        texts = [(line, c) for t_, c in lines for line in u.wrap(t_, f_text, inner)[:4]]
+        top = bottom + 8
+        bottom = top + 30 + len(texts) * (u.SMALL + 4) + 4
+        u.panel(d, (x1, top, x2, bottom), outline=outline, width=1 if outline == u.LINE else 2)
+        self.amount_text(d, top + 14, label, lcolor, sats, yours=yours)
+        y = top + 28
+        for line, c in texts:
+            d.text((x1 + 6, y), line, fill=c, font=f_text)
+            y += u.SMALL + 4
+
+        # 4. the fee, and the one note
+        y = bottom + 14
+        d.text((x1 + 2, y), "Fee", fill=u.DIM, font=u.fit_font("Fee", u.SMALL, x2 - x1 - 136, smallest=12), anchor="lm")
+        d.text((x2, y), btc(r.fee), fill=u.TEXT, font=u.font(u.SMALL, mono=True), anchor="rm")
+        y += 14
+        note, level = flow.summary_note(r)
+        if note:
+            y = u.paragraph(d, note, y, size=u.SMALL, color=LEVEL_COLORS[level], max_lines=3, line_gap=2)
+        self.sheet = image.crop((0, 0, WIDTH, y + 6))
+        return self.sheet
+
+    def amount_text(self, d, y, label, label_color, sats, yours=False):
+        x1, x2 = u.PAD, u.RIGHT
+        f_label = u.fit_font(label, u.SMALL, 96, bold=True, smallest=11)
+        d.text((x1 + 6, y), label, fill=label_color, font=f_label, anchor="lm")
+        if yours:
+            u.check_mark(d, x1 + 6 + u.text_width(label, f_label) + 11, y, 6, u.GREEN)
+        if sats is not None:
+            d.text((x2 - 6, y + 1), "BTC", fill=u.DIM, font=u.font(12, bold=True), anchor="rm")
+            d.text((x2 - 36, y), btc_amount(sats), fill=u.TEXT, font=u.font(u.BODY, bold=True, mono=True), anchor="rm")
+
+    def max_offset(self):
+        top, bottom = self.view()
+        return max(0, self.summary_sheet().height - (bottom - top))
 
     def draw(self, d, image):
         self.draw_banner(d)
         if self.summary:
-            self.draw_summary(d)
+            top, bottom = self.view()
+            sheet = self.summary_sheet()
+            part = sheet.crop((0, self.offset, WIDTH, min(sheet.height, self.offset + bottom - top)))
+            image.paste(part, (0, top))
+            total, view = sheet.height, bottom - top
+            if total > view:
+                bar_h = max(14, int(view * view / total))
+                bar_y = top + int((view - bar_h) * self.offset / max(1, self.max_offset()))
+                d.rounded_rectangle((WIDTH - 4, top, WIDTH - 1, bottom), radius=1, fill=u.PANEL)
+                d.rounded_rectangle((WIDTH - 4, bar_y, WIDTH - 1, bar_y + bar_h), radius=1, fill=u.ACCENT)
         else:
             self.list.draw(d)
         self.bar.draw(d)
 
     def on_event(self, event):
         if event.kind in (Event.UP, Event.DOWN):
+            step = -44 if event.kind == Event.UP else 44
             if self.list is not None:
-                self.list.scroll(-48 if event.kind == Event.UP else 48)
+                self.list.scroll(step)
             else:
-                self.page = 1 if event.kind == Event.DOWN else 0
+                self.offset = min(self.max_offset(), max(0, self.offset + step))
             return "__redraw__"
         if event.kind in (Event.LEFT, Event.RIGHT):
             self.bar.move(-1 if event.kind == Event.LEFT else 1)
@@ -872,6 +921,84 @@ class BroadcastScreen(u.Screen):
 
 
 # ---------------------------------------------------------------------------------------
+# v7.14: the invitation to donate, at the end of a session
+# ---------------------------------------------------------------------------------------
+class DonateScreen(u.Screen):
+    """
+    Three pages (LEFT/RIGHT): the project page with the signed details, the Lightning
+    BOLT12 offer, the Silent Payments address; each a QR read back before it is shown
+    (app.checked_qr). The center or KEY3 closes it. The details come from donate.py,
+    checked by a test against the signed docs/DONATE.txt.asc.
+    """
+    help_topic = "donate"
+    back_value = "done"
+    QR_BOX = 174
+    FIRST_BOX = 114
+
+    def __init__(self):
+        super().__init__()
+        from nonceverify import donate
+        self.pages = donate.pages()
+        # the first page has the invitation above its QR: a smaller box (never a resized QR: blurred modules)
+        self.boxes = [self.FIRST_BOX] + [self.QR_BOX] * (len(self.pages) - 1)
+        self.qrs = [app.checked_qr(payload, box, low_ecc=True)
+                    for (_t, _k, payload, _s), box in zip(self.pages, self.boxes)]
+        self.page = 0
+        self.selected = None
+
+    def render(self):
+        image, d = u.new_canvas()
+        title, _kind, _payload, sub = self.pages[self.page]
+        y = 14
+        u.icon(d, "heart", (u.PAD + 9, y), 16, u.ACCENT)
+        room = u.RIGHT - u.PAD - 22 - 30              # the page dots on the right
+        d.text((u.PAD + 22, y), title, fill=u.ACCENT, font=u.fit_font(title, u.BODY + 1, room, bold=True, smallest=12),
+               anchor="lm")
+        qr = self.qrs[self.page]
+        if self.page == 0:
+            y = u.paragraph(d, "Free and open source. If it helped you, a donation keeps it going.", 28, size=u.SMALL,
+                            max_lines=3, line_gap=2) + 6
+        else:
+            y = 28
+        box = self.boxes[self.page]
+        x = (WIDTH - u.TAB_W - box) // 2
+        d.rectangle((x, y, x + box, y + box), fill=(255, 255, 255))
+        if qr is not None:
+            image.paste(qr, (x + (box - qr.size[0]) // 2, y + (box - qr.size[1]) // 2))
+        else:
+            d.text((x + box / 2, y + box / 2), "QR not available", fill=u.RED, font=u.font(u.SMALL, bold=True),
+                   anchor="mm")
+        line = sub if self.page else "signed details: verify them on the page"
+        f = u.font(u.SMALL - 1)
+        lines = u.wrap(line, f, u.RIGHT - u.PAD - 4)[:2]
+        for i, text in enumerate(lines):
+            d.text(((u.PAD + u.RIGHT) / 2, y + box + 10 + i * 16), text, fill=u.DIM, font=f, anchor="mm")
+        # which page, and that there are others
+        for i in range(len(self.pages)):
+            cx = WIDTH - u.TAB_W - 10 - (len(self.pages) - 1 - i) * 9
+            r = 3 if i == self.page else 2
+            d.ellipse((cx - r, 14 - r, cx + r, 14 + r), fill=u.ACCENT if i == self.page else u.LINE)
+        for dx, ax in ((-1, 4), (1, WIDTH - u.TAB_W - 6)):
+            if 0 <= self.page + dx < len(self.pages):
+                cy = y + box / 2
+                d.polygon(((ax - 3 * dx, cy - 9), (ax + 3 * dx, cy), (ax - 3 * dx, cy + 9)), fill=u.ACCENT)
+        self.draw_tabs(d)
+        return image
+
+    def draw_tabs(self, d):
+        u.key_tab(d, Event.KEY1, "?", is_icon=False)
+        u.key_tab(d, Event.KEY3, "check", u.GREEN)
+
+    def on_event(self, event):
+        if event.kind in (Event.LEFT, Event.RIGHT):
+            self.page = max(0, min(len(self.pages) - 1, self.page + (1 if event.kind == Event.RIGHT else -1)))
+            return "__redraw__"
+        if event.kind in (Event.PRESS, Event.KEY3):
+            return "done"
+        return None
+
+
+# ---------------------------------------------------------------------------------------
 # The front end and the start
 # ---------------------------------------------------------------------------------------
 class ClassicFrontEnd:
@@ -921,6 +1048,9 @@ class ClassicFrontEnd:
 
     def broadcast(self, report):
         BroadcastScreen(report).run(self.hw)
+
+    def donate(self):
+        DonateScreen().run(self.hw)
 
 
 def run(hw, session: flow.Session = None, splash: bool = True):

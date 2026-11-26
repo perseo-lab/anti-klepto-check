@@ -36,9 +36,9 @@ RIGHT = WIDTH - TAB_W - 2             # content stops here, the tabs live beyond
 ITEM_H = 34
 
 # v7.13: text sizes on the 1.3" panel (about 2.2 mm per 10 px): nothing under SMALL
-SMALL = 14                            # secondary text, labels
-BODY = 16                             # normal text
-LARGE = 19                            # titles
+SMALL = 15                            # secondary text, labels (v7.14: one step larger)
+BODY = 17                             # normal text
+LARGE = 20                            # titles
 
 # v7.13: after this long without a key, the screensaver (any key wakes it and does nothing else)
 SCREENSAVER_S = 120

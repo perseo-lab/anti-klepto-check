@@ -29,6 +29,8 @@ TOPICS = {
                "words typed one by one, then the passphrase if you use one."),
         ("WHY", "Your keys are recomputed here from the seed. Another seed, or one character of "
                 "passphrase different, gives other keys: nothing to check, or \"seed does not match\"."),
+        ("WORDS", "Only the letters that can still lead to a BIP39 word are active. When four or fewer words are left they are offered: pick yours. At the end every word is checked with the checksum."),
+        ("SEEDQR", "Standard and compact SeedQR, 12 or 24 words. If it doesn't read: the QR full screen, zoom 1x, 20-30 cm away, no reflections."),
         ("PRIVACY", "Words and passphrase stay hidden until Show: an audience or a camera can't read them. "
                     "With a wrong checksum the words are shown, so you can find the wrong one."),
         ("SAFETY", "RAM only, never written to the microSD. Change seed and Finish wipe it; switching off "
@@ -68,12 +70,13 @@ TOPICS = {
     "result": ("Reading the result", [
         ("GREEN", "Every signature of this seed uses the nonce it had to use, sighash ALL, low S, and the "
                   "txid is Sparrow's. Tap Broadcast."),
+        ("CHECKS", "Four checks, each named on the result: Nonce, Sighash ALL, Txid, Change address. All four green: broadcast. Each one is explained below."),
+        ("NONCE", "Recomputed here with RFC 6979 from your key and the transaction, and compared with the nonce inside every signature of this seed. Any other nonce can carry your seed out (Dark Skippy): red."),
+        ("SIGHASH ALL", "Every signature, cosigners' included, must commit to all the inputs and all the outputs (SIGHASH_ALL), in strict DER with low S. NONE, SINGLE or ANYONECANPAY would let someone change the transaction after you signed: red."),
+        ("CHANGE ADDRESS", "Certified: the change address is derived here from your seed (multisig: from the descriptor you confirmed, or the same quorum as the coins spent) and is exactly the output's. Proven, not read from the PSBT's labels. Not certified: yellow, and no Broadcast."),
         ("SENDS TO", "The amount and the WHOLE address that receives it. Compare it with the address you "
                      "meant to pay (from the invoice, from the person): malware on a computer swaps "
                      "addresses."),
-        ("CHANGE YOURS", "The change pays a key derived here from your seed (multisig: from the descriptor "
-                         "you confirmed, or the same quorum as the coins spent). Proven, not read from the "
-                         "PSBT's labels."),
         ("YELLOW", "Not red, not ready: change where a wallet won't look, change that can't be proven, "
                    "cosigners still to check, not fully signed. Read the card and Details; broadcast only "
                    "when you understand why."),
@@ -120,6 +123,25 @@ TOPICS = {
         ("DO", "Tap an address: its QR and the address in groups of four. The QR is read back by the "
                "camera's decoder before it is shown: if it doesn't read exactly the address, no QR."),
         ("WHY", "A receive address taken from here doesn't depend on the computer."),
+    ]),
+    # v7.14: the passphrase, the start, the donation
+    "passphrase": ("The passphrase", [
+        ("DO", "Type the passphrase exactly as in the wallet that signed: capitals, spaces and symbols count. The XFP shown at the end must be the one in Sparrow's wallet."),
+        ("WHY", "The same words with another passphrase are another wallet: other keys, another XFP. A typo gives no error, it gives a different, empty wallet: the XFP is the check."),
+        ("SPACES", "Spaces are shown as ·: a space at the start or at the end is easy to miss and changes the wallet."),
+        ("SAFETY", "RAM only, hidden until Show, never written to the microSD."),
+    ]),
+    "start": ("Before you start", [
+        ("LANGUAGE", "Language and host are chosen here, before START. RAM only: at every power-on the device starts again in English, with Sparrow."),
+        ("HOST", "Sparrow loads back the transaction from this device's QR: the strongest check. Nunchuk can't load a second copy: you compare the whole txid instead."),
+        ("MICROSD", "The microSD is remounted read-only at start and checked every second. Nothing is ever written: no seed, no settings, no logs."),
+        ("NEXT", "START, then load the seed. Every step has its help page, like this one."),
+    ]),
+    "donate": ("Support the project", [
+        ("WHAT", "Anti-Klepto Check is free and open source. If it helped you, a donation keeps it going: Lightning (BOLT12) or on-chain with Silent Payments."),
+        ("VERIFY", "These details are signed with the author's key (PGP 513B 3583 0E4F 869E FC6D 9534 F1A0 5CB1 6C89 8D92) in docs/DONATE.txt.asc. A fork could change this screen, not the signature: check it on the project page."),
+        ("PRIVACY", "Silent Payments: every payment lands on a new Taproot output, never linkable from outside. BOLT12: a reusable offer, no invoice to ask for."),
+        ("NOTHING SENT", "This device only shows QR codes: scan them with your phone. Nothing leaves the device."),
     ]),
 }
 
