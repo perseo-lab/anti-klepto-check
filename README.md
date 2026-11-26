@@ -102,10 +102,11 @@ Bug reports are welcome as issues. Report security problems **privately** throug
 Each [release](../../releases) has two images, one for each device (`…-raspy-max-pi0.img`, `…-seedsigner-pi0.img`), `SHA256SUMS` and `SHA256SUMS.asc`. Take the one for your hardware.
 
 ```bash
-# 1. get my key (verify the fingerprint below from at least two places:
-#    this README, my GitHub profile, keys.openpgp.org)
-curl -fsSL https://github.com/Ollen47.gpg | gpg --import
+# 1. get my key from keys.openpgp.org, a source independent of GitHub
+gpg --keyserver hkps://keys.openpgp.org --recv-keys 513B35830E4F869EFC6D9534F1A05CB16C898D92
+#    (or from GitHub: curl -fsSL https://github.com/Ollen47.gpg | gpg --import)
 gpg --fingerprint 513B35830E4F869EFC6D9534F1A05CB16C898D92
+#    it must be exactly the fingerprint under "Signing key" below
 
 # 2. verify the signature, then the files
 gpg --verify SHA256SUMS.asc SHA256SUMS
@@ -173,9 +174,13 @@ SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.14-classic" docker c
 All commits and tags are signed.
 
 ```
-Ollen_47
+Ollen_47 <github.mandate556@passmail.net>
 513B 3583 0E4F 869E FC6D 9534 F1A0 5CB1 6C89 8D92
 ```
+
+**Where to check the fingerprint.** This README and `https://github.com/Ollen47.gpg` both come from GitHub: whoever controls this account controls both. [keys.openpgp.org](https://keys.openpgp.org/search?q=513B35830E4F869EFC6D9534F1A05CB16C898D92) is independent: it publishes a key under an email address only after the owner of that address has confirmed it. The two sources must give the same fingerprint.
+
+**Continuity.** The same key signs every commit and tag of this repository and every release since v7.10 (November 2026). If you verified an earlier release, or you have a clone of this repository, the fingerprint must be the same and your clone's history must still match. A different key, or a rewritten history, means something is wrong: do not use the image.
 
 ---
 
