@@ -104,7 +104,8 @@ Each [release](../../releases) has two images, one for each device (`…-raspy-m
 ```bash
 # 1. get my key (verify the fingerprint below from at least two places:
 #    this README, my GitHub profile, keys.openpgp.org)
-gpg --keyserver hkps://keys.openpgp.org --recv-keys 513B35830E4F869EFC6D9534F1A05CB16C898D92
+curl -fsSL https://github.com/Ollen47.gpg | gpg --import
+gpg --fingerprint 513B35830E4F869EFC6D9534F1A05CB16C898D92
 
 # 2. verify the signature, then the files
 gpg --verify SHA256SUMS.asc SHA256SUMS
