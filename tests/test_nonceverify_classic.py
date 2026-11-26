@@ -358,7 +358,7 @@ def is_words(text: str) -> bool:
     """ Interface text (to be translated), not data: at least one word of 3+ letters that isn't hex or a name """
     import re
     names = {"Sparrow", "Nunchuk", "Coldcard", "SeedSigner", "Trezor", "BTC", "PSBT", "XFP", "SeedQR", "BBQr",
-             "txid", "RFC", "START", "HELP", "CHECK", "ANTI", "KLEPTO", "Tor", "Tails"}
+             "txid", "RFC", "START", "HELP", "CHECK", "ANTI", "SKIPPY", "Tor", "Tails"}
     if text.lstrip().startswith(("#", "XFP ", "locktime ", "[OK]", "[!!]", "[--]", "[??]")):
         return False                       # data lines the Seed Max draws the same way (values, not words)
     words = [w for w in re.findall(r"[A-Za-z]{3,}", text) if w not in names and not re.fullmatch(r"[0-9a-f]+", w)]
@@ -380,7 +380,7 @@ def unusual_change_report():
 
 
 def screens():
-    """ (name, render) of every classic screen, with the test data (also used by tools/akc_screenshots.py) """
+    """ (name, render) of every classic screen, with the test data (also used by tools/readme_screenshots.py) """
     from test_nonceverify_v79 import green_report
     import test_nonceverify_v79 as v79
     from dataclasses import replace
@@ -523,7 +523,7 @@ def test_donation_details_are_the_signed_ones():
     assert donate.BOLT12_OFFER in body.split()
     assert donate.SILENT_PAYMENT in body.split()
     assert donate.AUTHOR_KEY in body
-    assert donate.PAGE_URL.startswith("https://github.com/perseo-lab/anti-klepto-check#")
+    assert donate.PAGE_URL.startswith("https://github.com/perseo-lab/anti-skippy-check#")
     for _title, _kind, payload, _sub in donate.pages():
         assert app.checked_qr(payload, ac.DonateScreen.QR_BOX, low_ecc=True) is not None, "every donation QR reads back"
         assert app.checked_qr(payload, app.DonateScreen.QR_BOX, low_ecc=True) is not None

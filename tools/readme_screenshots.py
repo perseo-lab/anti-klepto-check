@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Anti-Klepto Check: render the README screenshots straight from the device code.
+Anti-Skippy Check: render the README screenshots straight from the device code.
 
 The screens are drawn by the same code and on the same PIL canvas as on the device
 (480x320 for the Raspy Max, 240x240 for the classic SeedSigner), with the test data of
 tests/ (the public "abandon ... about" test seed).
 Usage, from the repository root, with the test dependencies installed (see README):
-    python3 tools/akc_screenshots.py docs/screenshots
+    python3 tools/readme_screenshots.py docs/screenshots
 """
 import os
 import sys

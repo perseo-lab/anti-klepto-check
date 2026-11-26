@@ -138,7 +138,7 @@ TOPICS = {
         ("NEXT", "START, then load the seed. Every step has its help page, like this one."),
     ]),
     "donate": ("Support the project", [
-        ("WHAT", "Anti-Klepto Check is free and open source. If it helped you, a donation keeps it going: Lightning (BOLT12) or on-chain with Silent Payments."),
+        ("WHAT", "Anti-Skippy Check is free and open source. If it helped you, a donation keeps it going: Lightning (BOLT12) or on-chain with Silent Payments."),
         ("VERIFY", "These details are signed with the author's key (PGP 513B 3583 0E4F 869E FC6D 9534 F1A0 5CB1 6C89 8D92) in docs/DONATE.txt.asc. A fork could change this screen, not the signature: check it on the project page."),
         ("PRIVACY", "Silent Payments: every payment lands on a new Taproot output, never linkable from outside. BOLT12: a reusable offer, no invoice to ask for."),
         ("NOTHING SENT", "This device only shows QR codes: scan them with your phone. Nothing leaves the device."),

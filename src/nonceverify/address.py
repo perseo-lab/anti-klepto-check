@@ -1,5 +1,5 @@
 """
-Anti-Klepto Check v7: does this address belong to my wallet?
+Anti-Skippy Check v7: does this address belong to my wallet?
 
 Before receiving (or to double check a change address) the address shown by Sparrow is
 scanned and searched for, by derivation, among the addresses of the loaded seed:

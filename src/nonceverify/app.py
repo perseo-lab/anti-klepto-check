@@ -1,5 +1,5 @@
 """
-Anti-Klepto Check, the verifier SD's application: load a seed, then
+Anti-Skippy Check, the verifier SD's application: load a seed, then
 - scan a signed PSBT and check every nonce (and, on green, confirm the txid against
   Sparrow before broadcasting), or
 - check that an address belongs to the wallet (v7): single-sig from the seed alone,
@@ -29,7 +29,7 @@ from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and old
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.14"
+VERSION = "7.15"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -104,7 +104,7 @@ def splash_background():
     image.alpha_composite(halo)
     d = ui.draw_on(image)
     ui.emblem(d, cx, cy, SplashScreen.EMBLEM_SIZE)
-    ui.spaced(d, (WIDTH / 2, 101), "ANTI-KLEPTO", ui.font(32, bold=True), ui.TEXT, 2)
+    ui.spaced(d, (WIDTH / 2, 101), "ANTI-SKIPPY", ui.font(32, bold=True), ui.TEXT, 2)
     ui.spaced(d, (WIDTH / 2, 127), "CHECK", ui.font(15, bold=True, mono=True), ui.ACCENT, 9)
 
     x1, y1, x2, y2 = SplashScreen.PANEL
@@ -130,7 +130,7 @@ def splash_background():
         d.text((fx + 19, fy - 5), name, fill=ui.TEXT, font=ui.fit_font(name, 13, room, bold=True, smallest=9),
                anchor="lm")
         d.text((fx + 19, fy + 8), sub, fill=ui.DIM, font=ui.fit_font(sub, 10, room, smallest=8), anchor="lm")
-    d.text((WIDTH / 2, 303), f"Anti-Klepto Check · verifier SD v{VERSION}", fill=ui.DIM,
+    d.text((WIDTH / 2, 303), f"Anti-Skippy Check · verifier SD v{VERSION}", fill=ui.DIM,
            font=ui.font(13, mono=True), anchor="mm")
     return image.convert("RGB")
 
@@ -1553,7 +1553,7 @@ class DonateScreen(ui.Screen):
         y = ui.paragraph(d, sub if self.page else "signed details: verify them on the page", y + 8, size=15,
                          color=ui.DIM, width=width, max_lines=3)
         if self.page == 0:
-            for i, part in enumerate(("github.com/perseo-lab/", "anti-klepto-check")):
+            for i, part in enumerate(("github.com/perseo-lab/", "anti-skippy-check")):
                 d.text((ui.PAD, y + 6 + i * 18), i18n.Translated(part), fill=ui.TEXT,
                        font=ui.fit_font(i18n.Translated(part), 15, width, mono=True, smallest=11))
 

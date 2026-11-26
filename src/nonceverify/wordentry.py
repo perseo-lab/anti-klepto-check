@@ -1,5 +1,5 @@
 """
-Anti-Klepto Check: the seed typed word by word (BIP39 English), for users who keep their
+Anti-Skippy Check: the seed typed word by word (BIP39 English), for users who keep their
 backup as words and not as a SeedQR.
 
 - 12 or 24 words.

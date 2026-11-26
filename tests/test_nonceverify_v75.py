@@ -62,7 +62,7 @@ def test_broadcast_tx_is_exactly_the_verified_one():
     assert report.broadcast_tx == clean, "the clean final transaction, byte for byte"
     leaky = leaky_final(unsigned)
     assert Transaction.parse(leaky).txid() == Transaction.parse(clean).txid(), "same txid, other witnesses"
-    assert report.broadcast_tx != leaky, "what the AKC exports is never the leaky one"
+    assert report.broadcast_tx != leaky, "what the verifier exports is never the leaky one"
 
 
 def test_broadcast_tx_from_partial_signatures_matches_embit_finalizer():

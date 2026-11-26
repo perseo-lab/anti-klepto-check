@@ -1,9 +1,9 @@
 """
-v7.12: Anti-Klepto Check on the classic SeedSigner (Pi Zero, Waveshare 1.3" 240x240 HAT
+v7.12: Anti-Skippy Check on the classic SeedSigner (Pi Zero, Waveshare 1.3" 240x240 HAT
 with joystick and three keys, Pi camera). The same verifier as on the Seed Max hardware:
 the same core (crypto, psbt, verify, address, transport, seedqr) and the same steps and
 rules (flow.py). Only the screens are drawn here, for 240x240 and the joystick, with the
-Anti-Klepto Check look.
+Anti-Skippy Check look.
 
 In this version: seed (SeedQR or words, passphrase), signer, PSBT (Coldcard Q included),
 txid, result, Broadcast, the "?" pages, languages and host. The address checks (single-sig,
@@ -78,7 +78,7 @@ def splash_background():
     image.alpha_composite(halo)
     d = u.draw_on(image)
     u.emblem(d, cx, cy, SplashScreen.EMBLEM_SIZE)
-    u.spaced(d, (WIDTH / 2, 68), "ANTI-KLEPTO", u.font(21, bold=True), u.TEXT, 1)
+    u.spaced(d, (WIDTH / 2, 68), "ANTI-SKIPPY", u.font(21, bold=True), u.TEXT, 1)
     u.spaced(d, (WIDTH / 2, 86), "CHECK", u.font(11, bold=True, mono=True), u.ACCENT, 6)
     return image.convert("RGB")
 
@@ -151,7 +151,7 @@ class SplashScreen(u.Screen):
             d.rectangle((0, 212, WIDTH, HEIGHT), fill=u.BACKGROUND)
             d.text((WIDTH / 2, 220), text, fill=u.YELLOW if writable else u.TEXT,
                    font=u.fit_font(text, 13, WIDTH - 12, bold=True, smallest=11), anchor="mm")
-        version = f"Anti-Klepto Check · verifier SD v{VERSION}"
+        version = f"Anti-Skippy Check · verifier SD v{VERSION}"
         d.text((WIDTH / 2, 233), version, fill=u.DIM, font=u.fit_font(version, 12, WIDTH - 8, smallest=10), anchor="mm")
         return image
 

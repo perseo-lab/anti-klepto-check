@@ -1,12 +1,13 @@
-# Anti-Klepto Check
+# Anti-Skippy Check
 
 **Verify what your hardware wallet actually signed, before you broadcast it. An air-gapped verifier that never signs. Part of [Perseo Lab](https://github.com/perseo-lab).**
 
-> Anti-Klepto Check is built on [SeedSigner](https://github.com/SeedSigner/seedsigner)'s code and operating system (MIT license), which it keeps under their original license and copyright. It is not affiliated with, endorsed by, or supported by the SeedSigner project. Please don't ask the SeedSigner team for help with it.
+> Anti-Skippy Check is built on [SeedSigner](https://github.com/SeedSigner/seedsigner)'s code and operating system (MIT license), which it keeps under their original license and copyright. It is not affiliated with, endorsed by, or supported by the SeedSigner project. Please don't ask the SeedSigner team for help with it.
 
 | | |
 |---|---|
-| **Latest** | v7.14, see [Releases](../../releases) |
+| **Latest** | v7.15, see [Releases](../../releases) |
+| **Formerly** | Anti-Klepto Check, up to v7.14: same project, same repository history, same signing key. The releases v7.10 and v7.14 keep the old name in their file names. |
 | **Runs on** | **[Raspy Max v5](https://github.com/perseo-lab/raspy-max-hardware)**: Raspberry Pi Zero + 3.5" 480×320 touch display + battery + camera (parts list, case and build guide in its repository).<br>**Standard SeedSigner** (since v7.12): Raspberry Pi Zero + Waveshare 1.3" 240×240 LCD HAT (joystick and three keys) + camera.<br>One image for each: same code, same checks. |
 | **Signers it checks** | Coldcard Q, SeedSigner, Trezor (any signer with deterministic RFC 6979 nonces, see *Limits*) |
 | **Host** | **Sparrow** (desktop, the main host and the strongest check); Nunchuk (phone) as an alternative |
@@ -25,7 +26,7 @@ A hardware wallet can be compromised (malicious firmware, supply chain, a coordi
 
 ## What it checks
 
-Anti-Klepto Check boots from its own microSD on a [Raspy Max](https://github.com/perseo-lab/raspy-max-hardware) or a standard SeedSigner: a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
+Anti-Skippy Check boots from its own microSD on a [Raspy Max](https://github.com/perseo-lab/raspy-max-hardware) or a standard SeedSigner: a second unit, or the same unit with the signing microSD swapped out. It holds your seed only in RAM, **never signs**, and recomputes everything with its own code:
 
 | Check | How |
 |---|---|
@@ -45,7 +46,7 @@ If everything is green, the device rebuilds the transaction **from the signature
 The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction, carries the QR codes between the signer and the verifier, and broadcasts.
 
 1. Create the transaction in Sparrow and sign it on your hardware wallet as usual.
-2. Scan the signed PSBT (from Sparrow or from the signer's screen) into Anti-Klepto Check. For a Coldcard Q: the final transaction plus the unsigned PSBT.
+2. Scan the signed PSBT (from Sparrow or from the signer's screen) into Anti-Skippy Check. For a Coldcard Q: the final transaction plus the unsigned PSBT.
 3. Compare the txid on the device with the one Sparrow shows.
 4. If green: in Sparrow, *File › Load Transaction › From QR*, scan the device's QR, check that the txid is the same, and broadcast from that tab (Sparrow opens it in a new one; close the old one).
 
@@ -53,7 +54,7 @@ The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction
 
 ## Screens
 
-Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screenshots.py), on the same canvas as the device, with the test data (the public *abandon … about* test seed).
+Rendered from the device code by [`tools/readme_screenshots.py`](tools/readme_screenshots.py), on the same canvas as the device, with the test data (the public *abandon … about* test seed).
 
 **Raspy Max** (480×320, touch):
 
@@ -91,7 +92,7 @@ Rendered from the device code by [`tools/akc_screenshots.py`](tools/akc_screensh
 - **Experimental software built by one person.** It is tested by the author on his own devices: on the Raspy Max with a Coldcard Q, a Trezor and a SeedSigner as signers and Sparrow as host; on a standard SeedSigner with Sparrow and Nunchuk. **No human third party has audited it.** Start with a test seed and small amounts.
 - **Developed with AI assistance** (Anthropic's Claude). Commits carry `Co-Authored-By` lines. The "independent reviews" mentioned in commit messages were separate AI-agent reviews, adversarial tests and mutation testing, not human audits.
 - The verifier is `src/nonceverify/`. Its cryptography (secp256k1, RFC 6979, BIP32/39, sighash, PSBT and descriptor parsing) is its own code on the Python standard library. The rules and the order of the steps (what is green, what may be broadcast, what stays red) are in `flow.py`, the same for both devices; each device only draws them (`app.py` for the Raspy Max, `app_classic.py` for the standard SeedSigner). The screen is drawn with Pillow; the display, touch, key and camera drivers are those of the image. `src/main.py` starts the verifier instead of SeedSigner: SeedSigner's signing code is in the tree but never runs, and an import guard keeps it out of the process.
-- The version numbers continue the history this code grew in: Seed Max v5 → Anti-Klepto Check v7.0 … v7.14. One version number is one code: the tag `vX.Y` builds the Raspy Max image, `vX.Y-classic` the standard SeedSigner one, and `git diff vX.Y vX.Y-classic` is a single line (`src/nonceverify/target.py`).
+- The version numbers continue the history this code grew in: Seed Max v5 → Anti-Klepto Check v7.0 … v7.14 → Anti-Skippy Check from v7.15 (the same project and the same signing key: only the name changed). One version number is one code: the tag `vX.Y` builds the Raspy Max image, `vX.Y-classic` the standard SeedSigner one, and `git diff vX.Y vX.Y-classic` is a single line (`src/nonceverify/target.py`).
 
 Bug reports are welcome as issues. Report security problems **privately** through [Security › Report a vulnerability](../../security/advisories/new), not in a public issue.
 
@@ -130,17 +131,17 @@ It only reads the two image files: no root rights, nothing mounted, nothing inst
 #    https://github.com/SeedSigner/seedsigner/releases/tag/0.8.7
 #    and verify it with SeedSigner's own instructions first
 # 2. this repository at the release tag, with its signature checked
-git clone https://github.com/perseo-lab/anti-klepto-check.git
-git -C anti-klepto-check tag -v v7.14            # standard SeedSigner image: v7.14-classic
+git clone https://github.com/perseo-lab/anti-skippy-check.git
+git -C anti-skippy-check tag -v v7.15            # standard SeedSigner image: v7.15-classic
 # 3. the audit
-python3 anti-klepto-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-klepto-check-v7.14-raspy-max-pi0.img \
-    --app-tree anti-klepto-check --app-rev v7.14
-python3 anti-klepto-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-klepto-check-v7.14-seedsigner-pi0.img \
-    --app-tree anti-klepto-check --app-rev v7.14-classic
+python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.15-raspy-max-pi0.img \
+    --app-tree anti-skippy-check --app-rev v7.15
+python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.15-seedsigner-pi0.img \
+    --app-tree anti-skippy-check --app-rev v7.15-classic
 echo "exit status: $?"
 ```
 
-Exit status `0` means: operating system identical to SeedSigner 0.8.7, application identical to the tag. Without `--app-tree` the tool never exits with `0` (it exits with `4`, incomplete). If the tag given with `--app-rev` doesn't exist, it stops with an error (`2`). The bytecode check needs CPython 3.12 (any 3.12.x); with another Python, run it in `docker run --rm -v "$PWD":/w -w /w python:3.12 python3 anti-klepto-check/tools/ssmax_image_audit.py ...`.
+Exit status `0` means: operating system identical to SeedSigner 0.8.7, application identical to the tag. Without `--app-tree` the tool never exits with `0` (it exits with `4`, incomplete). If the tag given with `--app-rev` doesn't exist, it stops with an error (`2`). The bytecode check needs CPython 3.12 (any 3.12.x); with another Python, run it in `docker run --rm -v "$PWD":/w -w /w python:3.12 python3 anti-skippy-check/tools/ssmax_image_audit.py ...`.
 
 What the audit does **not** verify: three subset fonts (NotoSans JP/KR/SC), cut at build time by whatever fonttools version is installed and never used by the verifier, and the `egg-info` metadata.
 
@@ -148,12 +149,12 @@ What the audit does **not** verify: three subset fonts (NotoSans JP/KR/SC), cut 
 
 ```bash
 git submodule update --init src/seedsigner/resources/seedsigner-translations
-python3 -m venv ~/venv/akc
-~/venv/akc/bin/pip install -r requirements.txt -r tests/requirements-test.txt
-~/venv/akc/bin/pip install --no-deps -e .
-~/venv/akc/bin/python setup.py compile_catalog
-~/venv/akc/bin/python -m pytest tests/test_main.py tests/test_nonceverify*.py   # the verifier
-~/venv/akc/bin/python -m pytest tests                                           # everything
+python3 -m venv ~/venv/anti-skippy
+~/venv/anti-skippy/bin/pip install -r requirements.txt -r tests/requirements-test.txt
+~/venv/anti-skippy/bin/pip install --no-deps -e .
+~/venv/anti-skippy/bin/python setup.py compile_catalog
+~/venv/anti-skippy/bin/python -m pytest tests/test_main.py tests/test_nonceverify*.py   # the verifier
+~/venv/anti-skippy/bin/python -m pytest tests                                           # everything
 ```
 
 `coincurve` (libsecp256k1) is used only by the tests, as an independent reference for signatures and nonces: without it, the verifier's tests are skipped. The full suite includes real-time touch tests and takes several minutes.
@@ -163,8 +164,8 @@ python3 -m venv ~/venv/akc
 The images are built with [SeedSigner OS](https://github.com/SeedSigner/seedsigner-os) (the 0.8.7 checkout), with this repository and the release tag as the app source, one build per device:
 
 ```bash
-SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.14" docker compose up --force-recreate --build          # Raspy Max
-SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.14-classic" docker compose up --force-recreate --build  # standard SeedSigner
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.15" docker compose up --force-recreate --build          # Raspy Max
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.15-classic" docker compose up --force-recreate --build  # standard SeedSigner
 ```
 
 ---
@@ -186,7 +187,7 @@ Ollen_47 <github.mandate556@passmail.net>
 
 ## Support the project
 
-Anti-Klepto Check is free and open source. If it is useful to you, a donation is welcome. The device shows the same details as QR codes at the end of a session (and this page's link):
+Anti-Skippy Check is free and open source. If it is useful to you, a donation is welcome. The device shows the same details as QR codes at the end of a session (and this page's link):
 
 - **Lightning**, a **BOLT12 offer**: scan it with Phoenix, Zeus or another BOLT12 wallet.
 - **On-chain**, a **Silent Payments address (BIP 352)**: every payment lands on a fresh Taproot output, so donations can't be linked or counted from outside.
@@ -201,7 +202,7 @@ gpg --verify docs/DONATE.txt.asc
 
 ## License and credits
 
-MIT. Original code © 2021 SeedSigner contributors; Seed Max and Anti-Klepto Check © 2026 Ollen_47. See [`LICENSE.md`](LICENSE.md).
+MIT. Original code © 2021 SeedSigner contributors; Seed Max and Anti-Skippy Check © 2026 Ollen_47. See [`LICENSE.md`](LICENSE.md).
 
 - [SeedSigner](https://github.com/SeedSigner/seedsigner): the operating system, drivers and code this is built on.
 - XPT2046 read sequence after Paul Stoffregen's XPT2046_Touchscreen (MIT).

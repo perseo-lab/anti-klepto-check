@@ -1,5 +1,5 @@
 """
-Anti-Klepto Check (verifier SD): `src/main.py` starts the nonce verifier, never the
+Anti-Skippy Check (verifier SD): `src/main.py` starts the nonce verifier, never the
 SeedSigner Controller. Replaces upstream's test_main.py, which drove the Controller (on
 this image main() starts the verifier, and that test would hang).
 """

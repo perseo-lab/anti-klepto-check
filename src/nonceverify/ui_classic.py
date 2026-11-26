@@ -1,5 +1,5 @@
 """
-v7.12: the Anti-Klepto Check look on the classic SeedSigner: 240x240, joystick and three
+v7.12: the Anti-Skippy Check look on the classic SeedSigner: 240x240, joystick and three
 keys. The same identity as on the Seed Max hardware (dark slate, teal accent, the shield
 and k emblem, monospace labels, the Tron splash), never SeedSigner's: palette, fonts,
 icons and the translated drawing come from ui.py; sizes and input are this screen's.

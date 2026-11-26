@@ -1,5 +1,5 @@
 """
-v7 of the Anti-Klepto Check (8 Nov 2026, after the first tests on the device):
+v7 of the Anti-Skippy Check (8 Nov 2026, after the first tests on the device):
 - the signer is fixed as soon as "Scan PSBT" is pressed (field report: going back from
   the camera, the name could still be changed);
 - no green before the txid has been compared with Sparrow's (forgotten twice in the field);

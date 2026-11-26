@@ -1,5 +1,5 @@
 """
-The Anti-Klepto Check UI: a small touch interface for the 480x320 panel, drawn with PIL.
+The Anti-Skippy Check UI: a small touch interface for the 480x320 panel, drawn with PIL.
 Its own look (dark slate, teal accent, monospace labels, shield-and-k emblem), so the
 verifier SD can never be mistaken for the signing SD. No SeedSigner GUI code is used;
 only the font files shipped in the image are reused, as plain data.
@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 from nonceverify.hw import HEIGHT, WIDTH, Event
 from nonceverify.i18n import Translated, t
 
-APP_NAME = "ANTI-KLEPTO CHECK"
+APP_NAME = "ANTI-SKIPPY CHECK"
 
 # Palette
 BACKGROUND = (10, 14, 20)
