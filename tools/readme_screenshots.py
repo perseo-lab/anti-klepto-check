@@ -26,7 +26,7 @@ SHOTS = [   # (file name, screen name in screens(), language)
     ("06-details", "details", "en"),
     ("07-broadcast", "broadcast", "en"),
     ("08-help", "help result", "en"),
-    ("09-result-italian", "result", "it"),
+    ("10-host", "host", "en"),          # v7.16: the host question after START (the Italian result: classic-08)
 ]
 
 # v7.14: the classic SeedSigner (240x240), saved at twice the size (each pixel a 2x2 block)

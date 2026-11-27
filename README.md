@@ -6,7 +6,7 @@
 
 | | |
 |---|---|
-| **Latest** | v7.15, see [Releases](../../releases) |
+| **Latest** | v7.16, see [Releases](../../releases) |
 | **Formerly** | Anti-Klepto Check, up to v7.14: same project, same repository history, same signing key. The releases v7.10 and v7.14 keep the old name in their file names. |
 | **Runs on** | **[Raspy Max v5](https://github.com/perseo-lab/raspy-max-hardware)**: Raspberry Pi Zero + 3.5" 480×320 touch display + battery + camera (parts list, case and build guide in its repository).<br>**Standard SeedSigner** (since v7.12): Raspberry Pi Zero + Waveshare 1.3" 240×240 LCD HAT (joystick and three keys) + camera.<br>One image for each: same code, same checks. |
 | **Signers it checks** | Coldcard Q, SeedSigner, Trezor (any signer with deterministic RFC 6979 nonces, see *Limits*) |
@@ -34,16 +34,16 @@ Anti-Skippy Check boots from its own microSD on a [Raspy Max](https://github.com
 | **SIGHASH_ALL** | on every signature, and low-S on every signature |
 | **Txid match** | the full txid, shown large, to compare with Sparrow's |
 | **Change check** | every output classified YOURS / NOT YOURS / NOT VERIFIED. Single-sig change keys are re-derived from the seed. Multisig change must match the descriptor confirmed against your paper backup, or the quorum being spent. |
-| **Address check / explorer** | is this address in your wallet? (single-sig BIP84/49/44, or a multisig descriptor from your backup) |
+| **Address check** | is this address in your wallet? (single-sig BIP84/49/44, or a multisig descriptor from your backup) |
 | **Air-gapped** | the microSD is remounted read-only and modules that could write it are blocked by an import guard. Language and host choices live in RAM only. |
 
-The result names its four checks, each green or not: **Nonce**, **Sighash ALL**, **Txid**, **Change address** (certified: derived from your seed). Then where the money goes, with the whole address, the change and the fee; every detail is one step away. A **"?"** on every screen explains what to do at that step and why. At the end of a session, an invitation to donate shows the signed payment details as QR codes (see *Support the project*).
+The result names its four checks, each green or not: **Nonce**, **Sighash ALL**, **Txid**, **Change address** (certified: derived from your seed). Then where the money goes, with the whole address, the change and the fee; every detail is one step away. A **"?"** on every screen explains what to do at that step and why. The signed donation details are on the splash, as QR codes, for whoever wants them (see *Support the project*).
 
 If everything is green, the device rebuilds the transaction **from the signatures it checked** and shows it as a QR code: you broadcast *that* one from Sparrow (File › Load Transaction › From QR).
 
 ## Workflow
 
-The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction, carries the QR codes between the signer and the verifier, and broadcasts.
+The host is **[Sparrow](https://sparrowwallet.com/)**: it builds the transaction, carries the QR codes between the signer and the verifier, and broadcasts. The device asks which host you use right after START (on the standard SeedSigner: on the splash), nothing preselected on the Raspy Max.
 
 1. Create the transaction in Sparrow and sign it on your hardware wallet as usual.
 2. Scan the signed PSBT (from Sparrow or from the signer's screen) into Anti-Skippy Check. For a Coldcard Q: the final transaction plus the unsigned PSBT.
@@ -60,21 +60,21 @@ Rendered from the device code by [`tools/readme_screenshots.py`](tools/readme_sc
 
 | | | |
 |---|---|---|
-| ![Splash: host and language, RAM only](docs/screenshots/01-splash.png) | ![Three steps](docs/screenshots/02-home.png) | ![Typing the seed words: only the letters that lead to a BIP-39 word](docs/screenshots/03-seed-words.png) |
-| Splash: host and language, RAM only | Three steps | Typing the seed words: only the letters that lead to a BIP-39 word |
-| ![The whole txid, to compare with Sparrow](docs/screenshots/04-txid.png) | ![Result: where the money goes, change proven yours](docs/screenshots/05-result.png) | ![Details](docs/screenshots/06-details.png) |
-| The whole txid, to compare with Sparrow | Result: where the money goes, change proven yours | Details |
-| ![Broadcast THIS: the checked transaction as a QR](docs/screenshots/07-broadcast.png) | !["?" help: what to do and why](docs/screenshots/08-help.png) | ![The same result in Italian](docs/screenshots/09-result-italian.png) |
-| Broadcast THIS: the checked transaction as a QR | "?" help: what to do and why | The same result in Italian |
+| ![Splash: language (RAM only) and donation](docs/screenshots/01-splash.png) | ![After START: which host, nothing preselected](docs/screenshots/10-host.png) | ![Three steps](docs/screenshots/02-home.png) |
+| Splash: language (RAM only) and donation | After START: which host, nothing preselected | Three steps |
+| ![Typing the seed words: only the letters that lead to a BIP-39 word](docs/screenshots/03-seed-words.png) | ![The whole txid, to compare with Sparrow](docs/screenshots/04-txid.png) | ![Result: where the money goes, change proven yours](docs/screenshots/05-result.png) |
+| Typing the seed words: only the letters that lead to a BIP-39 word; a key lights up when pressed | The whole txid, to compare with Sparrow | Result: where the money goes, change proven yours |
+| ![Details](docs/screenshots/06-details.png) | ![Broadcast THIS: the checked transaction as a QR](docs/screenshots/07-broadcast.png) | !["?" help: what to do and why](docs/screenshots/08-help.png) |
+| Details | Broadcast THIS: the checked transaction as a QR | "?" help: what to do and why |
 
 **Standard SeedSigner** (240×240, joystick and three keys; shown at twice the size). The joystick moves, its center chooses; KEY1 opens the "?" page, KEY2 deletes or zooms, KEY3 goes back. A tab beside each key says what it does on that screen.
 
 | | | | |
 |---|---|---|---|
-| ![Splash](docs/screenshots/classic-01-splash.png) | ![Seed words](docs/screenshots/classic-02-seed-words.png) | ![Txid](docs/screenshots/classic-03-txid.png) | ![Result: the four checks](docs/screenshots/classic-04-result-checks.png) |
-| Splash | Seed words, alphabetical | The whole txid; no answer preselected | Result: the four checks |
+| ![Splash: language, host and the heart](docs/screenshots/classic-01-splash.png) | ![Seed words: only the possible letters](docs/screenshots/classic-02-seed-words.png) | ![Txid](docs/screenshots/classic-03-txid.png) | ![Result: the four checks](docs/screenshots/classic-04-result-checks.png) |
+| Splash: language and host; the heart top left | Seed words: only the letters that can still make one | The whole txid; no answer preselected | Result: the four checks |
 | ![Result: the whole address](docs/screenshots/classic-05-result-address.png) | ![Broadcast THIS](docs/screenshots/classic-06-broadcast.png) | ![Support the project](docs/screenshots/classic-07-donate.png) | ![The result in Italian](docs/screenshots/classic-08-result-italian.png) |
-| Scrolling down: the whole address | Broadcast THIS | At the end: support the project | The result in Italian |
+| Scrolling down: the whole address | Broadcast THIS | From the heart: support the project | The result in Italian |
 
 ---
 
@@ -132,12 +132,12 @@ It only reads the two image files: no root rights, nothing mounted, nothing inst
 #    and verify it with SeedSigner's own instructions first
 # 2. this repository at the release tag, with its signature checked
 git clone https://github.com/perseo-lab/anti-skippy-check.git
-git -C anti-skippy-check tag -v v7.15            # standard SeedSigner image: v7.15-classic
+git -C anti-skippy-check tag -v v7.16            # standard SeedSigner image: v7.16-classic
 # 3. the audit
-python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.15-raspy-max-pi0.img \
-    --app-tree anti-skippy-check --app-rev v7.15
-python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.15-seedsigner-pi0.img \
-    --app-tree anti-skippy-check --app-rev v7.15-classic
+python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.16-raspy-max-pi0.img \
+    --app-tree anti-skippy-check --app-rev v7.16
+python3 anti-skippy-check/tools/ssmax_image_audit.py seedsigner_os.0.8.7.pi0.img anti-skippy-check-v7.16-seedsigner-pi0.img \
+    --app-tree anti-skippy-check --app-rev v7.16-classic
 echo "exit status: $?"
 ```
 
@@ -164,8 +164,8 @@ python3 -m venv ~/venv/anti-skippy
 The images are built with [SeedSigner OS](https://github.com/SeedSigner/seedsigner-os) (the 0.8.7 checkout), with this repository and the release tag as the app source, one build per device:
 
 ```bash
-SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.15" docker compose up --force-recreate --build          # Raspy Max
-SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.15-classic" docker compose up --force-recreate --build  # standard SeedSigner
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.16" docker compose up --force-recreate --build          # Raspy Max
+SS_ARGS="--pi0 --app-repo=<this repository> --app-branch=v7.16-classic" docker compose up --force-recreate --build  # standard SeedSigner
 ```
 
 ---
@@ -187,7 +187,7 @@ Ollen_47 <github.mandate556@passmail.net>
 
 ## Support the project
 
-Anti-Skippy Check is free and open source. If it is useful to you, a donation is welcome. The device shows the same details as QR codes at the end of a session (and this page's link):
+Anti-Skippy Check is free and open source. If it is useful to you, a donation is welcome. The device shows the same details as QR codes from its splash (*Donate*; on the standard SeedSigner, the heart top left), with this page's link:
 
 - **Lightning**, a **BOLT12 offer**: scan it with Phoenix, Zeus or another BOLT12 wallet.
 - **On-chain**, a **Silent Payments address (BIP 352)**: every payment lands on a fresh Taproot output, so donations can't be linked or counted from outside.
