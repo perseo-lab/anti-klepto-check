@@ -30,7 +30,7 @@ from test_nonceverify_ui import (WIPE, DESCRIPTOR_CONFIRM, COLDCARD_Q, FULL, LEF
 from test_nonceverify_address import OTHER1, multisig_descriptor                  # noqa: E402
 
 SINGLE = ("tap", 122, 194)          # AddressModeScreen
-MULTI = ("tap", 240, 194)
+MULTI = ("tap", 357, 194)           # v7.16: two buttons, Multisig on the right
 BACK_FROM_CAMERA = ("tap", 40, 240)
 
 
@@ -66,7 +66,7 @@ def test_signer_fixed_as_soon_as_a_scan_starts(monkeypatch):
     script_ += [SIGNER_BUTTON, SIGNER_BUTTON, ("shot", "50_locked_before_any_result")]
     script_ += [RIGHT, ("blank",)] + ur_parts(psbt.serialize()) + [SAME_TXID, ("shot", "51_result")]
     script_ += [RIGHT, ("blank",), BACK_FROM_CAMERA, LEFT, WIPE]                  # Next PSBT, back, Change seed, Wipe
-    script_ += load_seed_script(shots=False)[1:] + [("shot", "52_new_session"), ("stop",)]
+    script_ += load_seed_script(shots=False)[2:] + [("shot", "52_new_session"), ("stop",)]
     hw = FakeHardware(script_)
     session = app.Session()
     with pytest.raises(Stop):

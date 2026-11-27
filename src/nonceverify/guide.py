@@ -45,8 +45,8 @@ TOPICS = {
                          "or a clean signature looks red."),
         ("WHY IT IS FIXED", "Once you scan, the device can't change until Change seed. After a red, "
                             "trying the other names until one turns green would hide a real leak."),
-        ("NEXT", "Scan PSBT: the signed transaction, from Sparrow. Address: check an address of this "
-                 "wallet, or list your addresses (Explorer)."),
+        ("NEXT", "Scan PSBT: the signed transaction, from Sparrow. Change seed wipes this seed to load "
+                 "another (multisig: a cosigner's). Address: check an address of this wallet."),
     ]),
     "scan_psbt": ("Scan the signed PSBT", [
         ("DO", "In Sparrow, load what the signer returned, then show the signed PSBT as QR (File > Show "
@@ -102,8 +102,6 @@ TOPICS = {
         ("WHY", "Malware can show you an attacker's address to receive into. Checking it on an offline "
                 "device, with your seed, proves where the coins will land."),
         ("MULTISIG", "Needs the wallet descriptor, scanned from your paper backup and checked key by key."),
-        ("EXPLORER", "Lists your addresses, derived here, with their QR: take a receive address from here "
-                     "instead of from the computer."),
         ("RED QR", "A bitcoin: QR with lightning=, pj= or other instructions is red: a payer's wallet could "
                    "follow those instead of paying the address."),
     ]),
@@ -117,13 +115,6 @@ TOPICS = {
         ("KEPT", "The descriptor stays in RAM until you switch off, never on the microSD: public data, "
                  "but it reveals your wallet."),
     ]),
-    "explorer": ("Explorer", [
-        ("WHAT", "Your addresses, derived on this device from the seed (single-sig) or from the confirmed "
-                 "descriptor (multisig). Recv / Chg, account - / +, Go to #."),
-        ("DO", "Tap an address: its QR and the address in groups of four. The QR is read back by the "
-               "camera's decoder before it is shown: if it doesn't read exactly the address, no QR."),
-        ("WHY", "A receive address taken from here doesn't depend on the computer."),
-    ]),
     # v7.14: the passphrase, the start, the donation
     "passphrase": ("The passphrase", [
         ("DO", "Type the passphrase exactly as in the wallet that signed: capitals, spaces and symbols count. The XFP shown at the end must be the one in Sparrow's wallet."),
@@ -132,10 +123,11 @@ TOPICS = {
         ("SAFETY", "RAM only, hidden until Show, never written to the microSD."),
     ]),
     "start": ("Before you start", [
-        ("LANGUAGE", "Language and host are chosen here, before START. RAM only: at every power-on the device starts again in English, with Sparrow."),
+        ("LANGUAGE", "The language is chosen here, the host right after START. RAM only: at every power-on the device starts again in English and asks the host again."),
         ("HOST", "Sparrow loads back the transaction from this device's QR: the strongest check. Nunchuk can't load a second copy: you compare the whole txid instead."),
         ("MICROSD", "The microSD is remounted read-only at start and checked every second. Nothing is ever written: no seed, no settings, no logs."),
         ("NEXT", "START, then load the seed. Every step has its help page, like this one."),
+        ("DONATE", "Donate, top left: how to support the project, as QR codes. Nothing to do with the checks."),
     ]),
     "donate": ("Support the project", [
         ("WHAT", "Anti-Skippy Check is free and open source. If it helped you, a donation keeps it going: Lightning (BOLT12) or on-chain with Silent Payments."),

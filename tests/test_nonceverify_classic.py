@@ -202,15 +202,43 @@ def test_full_flow_green_broadcast_details_finish():
                PRESS, ("shot", "12_broadcast_qr"), PRESS, ("shot", "13_broadcast_how"),
                KEY3, LEFT, ("shot", "14_result_details_selected"), PRESS, ("shot", "15_details"), DOWN, DOWN,
                ("shot", "16_details_scrolled"), LEFT, PRESS, ("shot", "17_wipe"), LEFT, PRESS,
-               ("shot", "18_seed_wiped"), PRESS, ("shot", "18b_donate_page"), RIGHT, ("shot", "18c_donate_lightning"),
-               RIGHT, ("shot", "18d_donate_sp"), PRESS, ("shot", "19_home_again")]
+               ("shot", "18_seed_wiped"), PRESS, ("shot", "19_home_again")]     # v7.16: no donation here
     hw = run(script)
     assert hw.shots["09_txid"].tobytes() == hw.shots["09b_txid_push_ignored"].tobytes(), \
         "a push before moving the joystick answers nothing"
     assert banner(hw.shots["11_result_green"]) == u.GREEN
-    for name in ("18b_donate_page", "18c_donate_lightning", "18d_donate_sp"):
-        assert ac.decode_qr(hw.shots[name]) is not None, f"{name}: the QR reads"
     assert banner(hw.shots["15_details"]) == u.GREEN
+    assert ac.decode_qr(hw.shots["19_home_again"]) is None, "after the wipe, straight home: no donation QR"
+
+
+def test_splash_heart_opens_the_donation_and_comes_back():
+    """ v7.16: the heart top left of the splash (UP from Language), its pages, KEY3 back to the splash """
+    script = [("shot", "s0_splash"), UP, UP, UP, ("shot", "s1_heart"), PRESS, ("shot", "s2_donate_page"),
+              RIGHT, ("shot", "s3_donate_lightning"), RIGHT, ("shot", "s4_donate_sp"), KEY3,
+              ("shot", "s5_splash_again"), UP, ("shot", "s6_still_heart"), DOWN, DOWN, DOWN, PRESS,
+              ("shot", "s7_home")]
+    hw = run(script)
+    for name in ("s2_donate_page", "s3_donate_lightning", "s4_donate_sp"):
+        assert ac.decode_qr(hw.shots[name]) is not None, f"{name}: the QR reads"
+    heart = ac.SplashScreen.HEART_XY
+    assert hw.shots["s1_heart"].getpixel((heart[0] - 11, heart[1])) == u.ACCENT, "the heart selected: teal disc"
+    assert hw.shots["s0_splash"].getpixel((heart[0] - 11, heart[1])) != u.ACCENT, "at rest: no disc, START selected"
+    assert hw.shots["s5_splash_again"].tobytes() == hw.shots["s1_heart"].tobytes(), "back on the heart"
+    assert hw.shots["s6_still_heart"].tobytes() == hw.shots["s1_heart"].tobytes(), "nothing above the heart"
+
+
+def test_word_entry_shows_only_the_possible_letters():
+    """ v7.16: the letters that can't lead to a BIP39 word are not on the screen, the joystick never meets them """
+    from nonceverify.wordentry import next_letters
+    for text in ("", "a", "ab", "sc", "zo", "abandon"[:5]):
+        screen = wc.WordEntryScreen(0, 12, text)
+        letters = [v for kind, v in screen.cells.values() if kind == "letter"]
+        assert letters == sorted(next_letters(text)), text
+        assert screen.cursor == ((0, 0) if len(screen.candidates()) != 1 else screen.cursor)
+        screen.render()
+    assert len(wc.WordEntryScreen(0, 12, "").letter_rows()) == 4, "25 letters at the start: four rows as before"
+    few = wc.WordEntryScreen(0, 12, "ab")
+    assert len(few.letter_rows()) == 1 and few.key_rect("i")[3] - few.key_rect("i")[1] == few.KEY_H_MAX
 
 
 def test_broadcast_qr_is_the_checked_transaction():
@@ -401,6 +429,13 @@ def screens():
 
     def _screens():
         yield "splash", lambda: ac.SplashScreen().render()
+
+        def heart():                                    # v7.16: the heart selected
+            splash = ac.SplashScreen()
+            splash.selected = ac.SplashScreen.HEART
+            return splash.render()
+        yield "splash heart", heart
+        yield "entry few", lambda: wc.WordEntryScreen(2, 12, "sc").render()     # v7.16: only the possible letters
         yield "home", lambda: ac.HomeScreen().render()
         yield "count", lambda: wc.WordCountScreen().render()
         yield "entry", lambda: wc.WordEntryScreen(2, 12, "ab").render()

@@ -23,13 +23,13 @@ from nonceverify import flow
 # v7.11: the flow's rules live in flow.py (no screen code); the names stay here too
 from nonceverify.flow import (  # noqa: F401  (re-exported for the tests and older call sites)
     SIGNER__COLDCARD_Q, SIGNER__SEEDSIGNER, SIGNER__TREZOR, SIGNERS,
-    GRINDING_SHORT, BBQR_PART_CHARS, EXPLORER_MAX_ACCOUNT, EXPLORER_MAX_INDEX, EXPLORER_PAGE, KEY_CHECK_GROUPS,
-    Session, bbqr_parts, btc, btc_amount, can_export, indexed, key_dependent_start, lock_after_red,
+    GRINDING_SHORT, BBQR_PART_CHARS, KEY_CHECK_GROUPS,
+    Session, bbqr_parts, btc, btc_amount, can_export, key_dependent_start, lock_after_red,
     show_spaces, signer_grinding, signer_name, txid_rows)
 
 logger = logging.getLogger(__name__)
 
-VERSION = "7.15"
+VERSION = "7.16"
 
 # v7.5: randomness for the checks that must not be predictable (the xpub groups to find
 # on the paper). The OS's CSPRNG; tests swap in a fixed one.
@@ -151,10 +151,11 @@ class SplashScreen(ui.Screen):
     EMBLEM_SIZE = 76
     PANEL = (40, 138, 440, 232)       # v7.6: three rows (six checks)
     START = (140, 240, 340, 276)
-    # v7.10: host top left, language top right, either side of the emblem. In RAM
-    # only (i18n): never written to the microSD, English and Sparrow again at power-on.
+    # v7.10: language top right, in RAM only (i18n): never written to the microSD, English
+    # again at power-on. v7.16: the host is no longer here (HostScreen asks it after START);
+    # top left, the donation.
     CHIP_TOP, CHIP_BOTTOM = 4, 36
-    HOST_LEFT, HOST_W = 6, 76
+    DONATE_LEFT, DONATE_W, DONATE_W_MAX = 6, 96, 150      # left of the emblem's halo
     LANG_RIGHT, LANG_W = WIDTH - 6, 34
     CHIP_GAP = 4
     _backgrounds = {}
@@ -166,12 +167,11 @@ class SplashScreen(ui.Screen):
         self.buttons += self.chips()
 
     def chips(self):
-        out = []
-        for i, (code, name) in enumerate(i18n.HOSTS):
-            x1 = self.HOST_LEFT + i * (self.HOST_W + self.CHIP_GAP)
-            out.append(ui.Button((x1, self.CHIP_TOP, x1 + self.HOST_W, self.CHIP_BOTTOM), i18n.Translated(name),
-                                 value=("host", code),
-                                 size=15, primary=(code == i18n.host())))
+        # as wide as its label needs (15 px, heart included), never narrower than DONATE_W
+        label_w = ui.text_width(ui.t("Donate"), ui.font(15, bold=True))
+        width = max(self.DONATE_W, min(self.DONATE_W_MAX, int(label_w) + 15 + 8 + 16))
+        out = [ui.Button((self.DONATE_LEFT, self.CHIP_TOP, self.DONATE_LEFT + width, self.CHIP_BOTTOM),
+                         "Donate", value=("donate", None), size=15, icon_name="heart")]
         n = len(i18n.LANGUAGES)
         left = self.LANG_RIGHT - n * self.LANG_W - (n - 1) * self.CHIP_GAP
         for i, (code, name) in enumerate(i18n.LANGUAGES):
@@ -186,7 +186,9 @@ class SplashScreen(ui.Screen):
         for b in self.buttons[1:]:
             if b.contains(event.x, event.y, margin=1):
                 kind, code = b.value
-                (i18n.set_language if kind == "lang" else i18n.set_host)(code)
+                if kind == "donate":
+                    return "donate"            # v7.16: the donation, then the splash again
+                i18n.set_language(code)
                 self.buttons = self.buttons[:1] + self.chips()
                 return "__redraw__"
         return super().on_event(event)
@@ -221,6 +223,41 @@ class SplashScreen(ui.Screen):
             d.text((WIDTH / 2, 289), text, fill=ui.YELLOW if writable else ui.DIM,
                    font=ui.font(13, bold=writable, mono=True), anchor="mm")
         return image
+
+
+class HostScreen(ui.Screen):
+    """
+    v7.16: right after START, which program the transaction comes from and goes back to.
+    Nothing preselected: the steps' instructions and the way to broadcast depend on it.
+    RAM only (i18n), Sparrow again at power-on until answered. Returns the host's code,
+    or "back" (the splash).
+    """
+    help_topic = "start"
+    header_label = "HOST"
+    TOP_Y = 150
+    HEIGHT_ = 74
+    SUBTITLES = {"sparrow": "on the computer · Tx QR", "nunchuk": "on the phone"}
+
+    def __init__(self):
+        super().__init__()
+        n = len(i18n.HOSTS)
+        width = (WIDTH - ui.PAD * (n + 1)) / n
+        self.buttons = []
+        for i, (code, name) in enumerate(i18n.HOSTS):
+            x1 = ui.PAD + i * (width + ui.PAD)
+            self.buttons.append(ui.Button((x1, self.TOP_Y, x1 + width, self.TOP_Y + self.HEIGHT_),
+                                          i18n.Translated(name), value=code, size=24))
+        self.buttons += ui.bottom_row(["Back"], values=["back"], icons=["back"])
+
+    def draw(self, d, image):
+        ui.title(d, "What do you prepare the transaction with?")
+        ui.paragraph(d, "The program that makes the PSBT and then broadcasts it. The instructions and the way to "
+                        "broadcast depend on it. RAM only.", ui.TOP + 34, size=16, color=ui.DIM, max_lines=3)
+        for b in self.buttons[:len(i18n.HOSTS)]:
+            x1, _y1, x2, y2 = b.rect
+            text = self.SUBTITLES.get(b.value, "")
+            d.text(((x1 + x2) / 2, y2 + 14), text, fill=ui.DIM,
+                   font=ui.fit_font(text, 14, int(x2 - x1) - 8, smallest=11), anchor="mm")
 
 
 class HomeScreen(ui.Screen):
@@ -893,15 +930,15 @@ class AddressModeScreen(ui.Screen):
     def __init__(self, descriptor=None):
         super().__init__()
         self.descriptor = descriptor
-        self.buttons = ui.button_row(["Single-sig", "Multisig", "Explorer"], 166, height=56,
-                                     values=["single", "descriptor", "explorer"], icons=["fingerprint", "key", "qr"])
+        # v7.16: no Explorer
+        self.buttons = ui.button_row(["Single-sig", "Multisig"], 166, height=56,
+                                     values=["single", "descriptor"], icons=["fingerprint", "key"])
         self.buttons += ui.bottom_row(["Back"], values=["back"], icons=["back"])
 
     def draw(self, d, image):
         ui.title(d, "Check an address")
-        ui.paragraph(d, "Check: is the address Sparrow shows really this wallet's? Explorer: list the "
-                        "wallet's addresses, derived here from the seed, with their QR.", ui.TOP + 34, size=16,
-                     color=ui.DIM)
+        ui.paragraph(d, "Check: is the address Sparrow shows really this wallet's? It is searched among this "
+                        "wallet's addresses, derived here from the seed.", ui.TOP + 34, size=16, color=ui.DIM)
         note = ("Multisig: the descriptor scanned this session is used: "
                 + self.descriptor.describe()) if self.descriptor else \
             "Multisig: you scan the wallet descriptor from your paper backup first."
@@ -1128,7 +1165,7 @@ class AddressResultScreen(ui.Screen):
 
 
 # ---------------------------------------------------------------------------------------
-# v7.3: address explorer
+# Addresses on screen and QR codes (v7.16: the explorer is gone)
 # ---------------------------------------------------------------------------------------
 def address_lines(text: str, width: int) -> list:
     """ v7.9: the whole address in groups of four, in at most two lines (the font shrinks if needed) """
@@ -1139,15 +1176,6 @@ def address_lines(text: str, width: int) -> list:
     if all(ui.text_width(ln, ui.font(14, mono=True)) <= width for ln in lines):
         return lines
     return ui.wrap(" ".join(groups), ui.font(14, mono=True), width)
-
-
-def short_address(text: str, f, width: int) -> str:
-    """ The address in groups of four, the middle elided if it doesn't fit """
-    full = address.grouped(text)
-    if ui.text_width(full, f) <= width:
-        return full
-    groups = full.split(" ")
-    return " ".join(groups[:4]) + " … " + " ".join(groups[-2:])
 
 
 def checked_qr(data: str, size: int, low_ecc: bool = False):
@@ -1178,12 +1206,6 @@ def checked_qr(data: str, size: int, low_ecc: bool = False):
         logger.info("QR self-check failed")
         return None
     return image
-
-
-def address_qr(text: str, size: int):
-    """ The address as a QR (bech32 uppercase: a smaller QR, and BIP173 allows it) """
-    bech32 = text.lower().startswith(("bc1", "tb1", "bcrt1"))
-    return checked_qr(text.upper() if bech32 else text, size)
 
 
 class BroadcastScreen(ui.Screen):
@@ -1271,154 +1293,6 @@ class BroadcastScreen(ui.Screen):
             hw.wait()
 
 
-class ExplorerWalletScreen(ui.Screen):
-    help_topic = "explorer"  # v7.9: the "?" page
-    header_label = "EXPLORER"
-
-    def __init__(self, descriptor=None):
-        super().__init__()
-        self.descriptor = descriptor
-        self.buttons = ui.button_row(["Native bc1q · 84", "Nested 3… · 49"], ui.TOP + 40, height=56,
-                                     values=["84", "49"])
-        self.buttons += ui.button_row(["Legacy 1… · 44", "Multisig"], ui.TOP + 106, height=56,
-                                      values=["44", "multisig"], icons=[None, "key"])
-        self.buttons += ui.bottom_row(["Back"], values=["back"], icons=["back"])
-
-    def draw(self, d, image):
-        ui.title(d, "Which addresses?")
-        note = ("Multisig: " + self.descriptor.describe()) if self.descriptor else \
-            "Multisig: you scan the descriptor from your paper backup first."
-        ui.paragraph(d, note, ui.TOP + 176, size=14, color=ui.DIM, max_lines=2)
-
-
-class ExplorerListScreen(ui.Screen):
-    help_topic = "explorer"  # v7.9: the "?" page
-    header_label = "EXPLORER"
-    ROW_TOP = ui.TOP + 66
-    ROW_H = 40
-
-    def __init__(self, explorer, change: bool, start: int, singlesig: bool):
-        super().__init__()
-        self.explorer, self.change, self.start = explorer, change, start
-        self.rows = [explorer.address(change, start + i) for i in range(EXPLORER_PAGE)] \
-            if indexed(explorer) else [explorer.address(change, 0)]
-        top = ui.TOP + 2
-        # v7.5: two segments instead of a toggle that turned teal (like an action button)
-        self.buttons = [ui.Button((ui.PAD, top, 78, top + 38), "Recv", value="receive", size=17, primary=not change),
-                        ui.Button((82, top, 150, top + 38), "Chg", value="change", size=17, primary=change)]
-        if singlesig:
-            self.buttons += [ui.Button((160, top, 204, top + 38), "−", value="acct-", size=22),
-                             ui.Button((290, top, 334, top + 38), "+", value="acct+", size=22)]
-        self.buttons.append(ui.Button((WIDTH - ui.PAD - 120, top, WIDTH - ui.PAD, top + 38), "Go to #",
-                                      value="goto", size=17))
-        self.buttons += ui.bottom_row(["Back", "Prev", "Next"], values=["back", "prev", "next"],
-                                      icons=["back", None, None])
-        self.singlesig = singlesig
-
-    def draw(self, d, image):
-        if self.singlesig:
-            d.text((247, ui.TOP + 21), f"acct {self.explorer.account}", fill=ui.TEXT,
-                   font=ui.font(16, bold=True, mono=True), anchor="mm")
-        d.text((ui.PAD, ui.TOP + 54), self.explorer.label, fill=ui.DIM, font=ui.font(14), anchor="lm")
-        f = ui.font(16, mono=True)
-        f_index = ui.font(15, bold=True, mono=True)
-        col = max(50, max((ui.text_width(f"#{steps[-1]}", f_index) + 6 for _t, steps in self.rows), default=50)) \
-            if indexed(self.explorer) else 50
-        for i, (text, steps) in enumerate(self.rows):
-            y = self.ROW_TOP + i * self.ROW_H
-            d.rounded_rectangle((ui.PAD, y + 1, WIDTH - ui.PAD, y + self.ROW_H - 3), radius=4,
-                                fill=ui.PANEL, outline=ui.LINE)
-            index = steps[-1] if indexed(self.explorer) else None
-            d.text((ui.PAD + col, y + self.ROW_H / 2 - 1), f"#{index}" if index is not None else "", fill=ui.ACCENT,
-                   font=f_index, anchor="rm")
-            d.text((ui.PAD + col + 8, y + self.ROW_H / 2 - 1), short_address(text, f, WIDTH - 2 * ui.PAD - col - 12),
-                   fill=ui.TEXT, font=f, anchor="lm")
-
-    def on_event(self, event):
-        value = super().on_event(event)
-        if value is not None:
-            return value
-        if event.kind == Event.SWIPE_UP:
-            return "next"
-        if event.kind == Event.SWIPE_DOWN:
-            return "prev"
-        if event.kind == Event.TAP and self.ROW_TOP <= event.y < self.ROW_TOP + len(self.rows) * self.ROW_H:
-            return ("row", int((event.y - self.ROW_TOP) // self.ROW_H))
-        return None
-
-
-class AddressDetailScreen(ui.Screen):
-    help_topic = "explorer"  # v7.9: the "?" page
-    header_label = "EXPLORER"
-    QR_SIZE = 222
-
-    def __init__(self, text: str, where: str, path: str, label: str):
-        super().__init__()
-        self.text, self.where, self.path, self.label = text, where, path, label
-        self.qr = address_qr(text, self.QR_SIZE)
-        self.buttons = ui.bottom_row(["Back"], values=["back"], icons=["back"])
-
-    def draw(self, d, image):
-        x = ui.PAD
-        if self.qr is not None:
-            box = self.QR_SIZE
-            d.rectangle((x, ui.TOP + 2, x + box, ui.TOP + 2 + box), fill=(255, 255, 255))
-            image.paste(self.qr, (x + (box - self.qr.size[0]) // 2, ui.TOP + 2 + (box - self.qr.size[1]) // 2))
-            x += box + 12
-        width = WIDTH - ui.PAD - x
-        d.text((x, ui.TOP + 14), self.where, fill=ui.GREEN, font=ui.font(20, bold=True), anchor="lm")
-        y = ui.TOP + 32
-        for line in ui.wrap(self.path, ui.font(14, mono=True), width)[:2]:
-            d.text((x, y), line, fill=ui.DIM, font=ui.font(14, mono=True))
-            y += 17
-        y += 6
-        size = 18 if self.qr is not None else 22
-        f = ui.font(size, bold=True, mono=True)
-        for line in ui.wrap(address.grouped(self.text), f, width):
-            d.text((x, y), line, fill=ui.TEXT, font=f)
-            y += size + 4
-        if self.qr is None:
-            d.text((x, y + 8), "QR not available: compare the text", fill=ui.YELLOW, font=ui.font(14))
-        d.text((x, ui.TOP + 214), self.label, fill=ui.DIM, font=ui.fit_font(self.label, 13, width), anchor="ls")
-
-
-def explorer_flow(hw, session):
-    while True:
-        choice = ExplorerWalletScreen(session.descriptor).run(hw)
-        if choice not in ("84", "49", "44", "multisig"):
-            return
-        if choice == "multisig":
-            if session.descriptor is None and not load_descriptor(hw, session):
-                continue
-            explorer, singlesig = address.DescriptorExplorer(session.descriptor), False
-        else:
-            explorer, singlesig = address.SinglesigExplorer(session.master, int(choice), 0), True
-        change, start = False, 0
-        while True:
-            value = ExplorerListScreen(explorer, change, start, singlesig).run(hw)
-            if value == "back":
-                break
-            if value in ("receive", "change") and (value == "receive" or explorer.has_change()):
-                change = value == "change"
-            elif value in ("acct-", "acct+") and singlesig:
-                account = min(EXPLORER_MAX_ACCOUNT, max(0, explorer.account + (1 if value == "acct+" else -1)))
-                if account != explorer.account:
-                    explorer, start = address.SinglesigExplorer(session.master, explorer.purpose, account), 0
-            elif value == "prev":
-                start = max(0, start - EXPLORER_PAGE)
-            elif value == "next":
-                start = min(EXPLORER_MAX_INDEX, start + EXPLORER_PAGE)
-            elif value == "goto":
-                result = ui.NumberPadScreen("Go to address #").run(hw)       # v7.5: digits only
-                if result[0] == "done" and result[1].isdigit() and len(result[1]) <= 10:
-                    start = min(EXPLORER_MAX_INDEX, int(result[1]))
-            elif isinstance(value, tuple) and value[0] == "row":
-                text, steps = explorer.address(change, start + value[1] if indexed(explorer) else 0)
-                where = ("change" if change else "receive") + (f" #{steps[-1]}" if indexed(explorer) else "")
-                path = crypto.format_path(steps) if singlesig else "…/" + address.format_steps(steps)
-                AddressDetailScreen(text, where, path, explorer.label).run(hw)
-
-
 def scan_address(hw):
     found = {}
 
@@ -1469,9 +1343,6 @@ def address_flow(hw, session):
     """ "Address" on the seed screen. Returns when the user goes back to the seed screen """
     while True:
         mode = AddressModeScreen(session.descriptor).run(hw)
-        if mode == "explorer":
-            explorer_flow(hw, session)
-            continue
         if mode not in ("single", "descriptor"):
             return
         if mode == "descriptor" and session.descriptor is None and not load_descriptor(hw, session):
@@ -1508,7 +1379,8 @@ def address_flow(hw, session):
 # ---------------------------------------------------------------------------------------
 class DonateScreen(ui.Screen):
     """
-    v7.14: the invitation to donate at the end of a session, as on the Seed Max (Donate):
+    v7.14: the invitation to donate, as on the Seed Max (Donate); v7.16: opened from the
+    splash (no longer at the end of a session), Back returns there:
     the project page with the signed details, the Lightning BOLT12 offer, the Silent
     Payments address. Each one a QR read back before it is shown; the details come from
     donate.py, checked by a test against the signed docs/DONATE.txt.asc.
@@ -1526,9 +1398,9 @@ class DonateScreen(ui.Screen):
         self.make_buttons()
 
     def make_buttons(self):
-        self.buttons = ui.bottom_row(list(self.TABS) + ["Done"], primary_index=self.page,
-                                     values=[("page", i) for i in range(len(self.TABS))] + ["done"],
-                                     icons=[None, None, None, "check"])
+        self.buttons = ui.bottom_row(list(self.TABS) + ["Back"], primary_index=self.page,
+                                     values=[("page", i) for i in range(len(self.TABS))] + ["back"],
+                                     icons=[None, None, None, "back"])
 
     def draw(self, d, image):
         title, _kind, _payload, sub = self.pages[self.page]
@@ -1577,7 +1449,15 @@ class MaxFrontEnd:
         self.hw = hw
 
     def splash(self):
-        SplashScreen().run(self.hw)
+        """ v7.16: the splash (with the donation), then the host question; Back returns to the splash """
+        while True:
+            if SplashScreen().run(self.hw) == "donate":
+                DonateScreen().run(self.hw)
+                continue
+            host = HostScreen().run(self.hw)
+            if host in dict(i18n.HOSTS):
+                i18n.set_host(host)
+                return
 
     def home(self):
         return HomeScreen().run(self.hw)
@@ -1619,9 +1499,6 @@ class MaxFrontEnd:
 
     def address(self, session):
         address_flow(self.hw, session)
-
-    def donate(self):
-        DonateScreen().run(self.hw)
 
 
 def run(hw, session: Session = None, splash: bool = True):

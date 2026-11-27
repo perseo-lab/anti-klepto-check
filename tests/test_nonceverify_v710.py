@@ -79,12 +79,19 @@ def test_splash_chips_set_ram_only_state(monkeypatch):
         assert tap_chip(s, "lang", lang) == "__redraw__"
         assert i18n.language() == lang
         s.render()
-    assert tap_chip(s, "host", "nunchuk") == "__redraw__"
-    assert i18n.host() == "nunchuk"
     image = s.render()
     assert image.size == (WIDTH, HEIGHT)
     primary = [b.value for b in s.buttons[1:] if b.primary]
-    assert primary == [("host", "nunchuk"), ("lang", "de")]
+    assert primary == [("lang", "de")], "v7.16: no host on the splash, only the language"
+    assert tap_chip(s, "donate", None) == "donate", "v7.16: the donation, top left"
+    # v7.16: the host is asked after START, nothing preselected, RAM only too
+    h = app.HostScreen()
+    assert not any(b.primary for b in h.buttons), "no answer preselected"
+    x1, y1, x2, y2 = next(b.rect for b in h.buttons if b.value == "nunchuk")
+    assert h.on_event(Event(Event.TAP, (x1 + x2) // 2, (y1 + y2) // 2)) == "nunchuk"
+    i18n.set_host("nunchuk")
+    assert i18n.host() == "nunchuk"
+    h.render()
     i18n.reset()
     assert (i18n.language(), i18n.host()) == ("en", "sparrow")
 
@@ -175,6 +182,8 @@ def screens():
     yield "details", lambda: app.ResultScreen(g, "seedsigner", txid_confirmed=True, details=True).render()
     yield "broadcast", lambda: app.BroadcastScreen(g).render()
     yield "address", lambda: app.AddressModeScreen().render()
+    yield "host", lambda: app.HostScreen().render()                  # v7.16
+    yield "donate", lambda: app.DonateScreen().render()              # v7.16: from the splash
     yield "words", lambda: wordentry.WordEntryScreen(4, 24, "ab").render()
     yield "review", lambda: wordentry.SeedReviewScreen(["able"] * 11 + ["about"]).render()
     for topic in guide.TOPICS:
@@ -239,4 +248,4 @@ def test_steps_shrink_but_never_reach_the_help_button(monkeypatch):
 
 
 def test_version():
-    assert app.VERSION == "7.15"
+    assert app.VERSION == "7.16"

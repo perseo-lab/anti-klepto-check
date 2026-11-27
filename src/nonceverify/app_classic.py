@@ -7,7 +7,7 @@ Anti-Skippy Check look.
 
 In this version: seed (SeedQR or words, passphrase), signer, PSBT (Coldcard Q included),
 txid, result, Broadcast, the "?" pages, languages and host. The address checks (single-sig,
-multisig descriptor, explorer) come in a later version.
+multisig descriptor) come in a later version.
 
 This image never signs, never exports a key and never shows a seed unasked. Nothing is
 written to the microSD: it is remounted read-only before anything else (storage.py).
@@ -89,7 +89,11 @@ class SplashScreen(u.Screen):
     The tool's name, unmistakably not SeedSigner; language and host (RAM only, as on the
     Seed Max: English and Sparrow again at power-on); START. UP/DOWN move between the three
     rows, LEFT/RIGHT change language or host, the center on START starts.
+    v7.16: a small heart top left, above the rows (UP from Language): the center opens the
+    donation. `selected` is HEART there.
     """
+    HEART = -1
+    HEART_XY = (16, 16)
     HORIZON = 98
     EMBLEM_CY = 32
     EMBLEM_SIZE = 44
@@ -109,9 +113,18 @@ class SplashScreen(u.Screen):
             cls._backgrounds[lang] = splash_background()
         return cls._backgrounds[lang]
 
+    def draw_heart(self, d):
+        cx, cy = self.HEART_XY
+        if self.selected == self.HEART:
+            d.ellipse((cx - 13, cy - 13, cx + 13, cy + 13), fill=u.ACCENT)
+            u.icon(d, "heart", (cx, cy + 1), 15, u.BACKGROUND)
+        else:
+            u.icon(d, "heart", (cx, cy + 1), 14, (120, 150, 170))
+
     def render(self):
         image = self.background().copy()
         d = u.draw_on(image)
+        self.draw_heart(d)
         x1, y1, x2, y2 = self.PANEL
         d.rounded_rectangle(self.PANEL, radius=8, fill=u.PANEL, outline=(70, 96, 124), width=1)
         rows = (("Language", dict(i18n.LANGUAGES)[i18n.language()]), ("Host", i18n.host_name()))
@@ -157,12 +170,14 @@ class SplashScreen(u.Screen):
 
     def on_event(self, event):
         if event.kind == Event.UP:
-            self.selected = max(0, self.selected - 1)
+            self.selected = max(self.HEART, self.selected - 1)
             return "__redraw__"
         if event.kind == Event.DOWN:
             self.selected = min(2, self.selected + 1)
             return "__redraw__"
-        if event.kind in (Event.LEFT, Event.RIGHT) and self.selected < 2:
+        if event.kind == Event.PRESS and self.selected == self.HEART:
+            return "donate"
+        if event.kind in (Event.LEFT, Event.RIGHT) and 0 <= self.selected < 2:
             options = i18n.LANGUAGES if self.selected == 0 else i18n.HOSTS
             codes = [c for c, _n in options]
             current = i18n.language() if self.selected == 0 else i18n.host()
@@ -927,11 +942,12 @@ class DonateScreen(u.Screen):
     """
     Three pages (LEFT/RIGHT): the project page with the signed details, the Lightning
     BOLT12 offer, the Silent Payments address; each a QR read back before it is shown
-    (app.checked_qr). The center or KEY3 closes it. The details come from donate.py,
+    (app.checked_qr). The center or KEY3 closes it. v7.16: opened from the splash's heart
+    (no longer at the end of a session): closing goes back there. The details come from donate.py,
     checked by a test against the signed docs/DONATE.txt.asc.
     """
     help_topic = "donate"
-    back_value = "done"
+    back_value = "back"
     QR_BOX = 174
     FIRST_BOX = 114
 
@@ -987,14 +1003,14 @@ class DonateScreen(u.Screen):
 
     def draw_tabs(self, d):
         u.key_tab(d, Event.KEY1, "?", is_icon=False)
-        u.key_tab(d, Event.KEY3, "check", u.GREEN)
+        u.key_tab(d, Event.KEY3, "back", u.TEXT)
 
     def on_event(self, event):
         if event.kind in (Event.LEFT, Event.RIGHT):
             self.page = max(0, min(len(self.pages) - 1, self.page + (1 if event.kind == Event.RIGHT else -1)))
             return "__redraw__"
         if event.kind in (Event.PRESS, Event.KEY3):
-            return "done"
+            return "back"
         return None
 
 
@@ -1009,7 +1025,16 @@ class ClassicFrontEnd:
         self.hw = hw
 
     def splash(self):
-        SplashScreen().run(self.hw)
+        """ v7.16: the donation from the splash's heart, then the splash again (the heart still selected) """
+        selected = None
+        while True:
+            splash = SplashScreen()
+            if selected is not None:
+                splash.selected = selected
+            if splash.run(self.hw) != "donate":
+                return
+            DonateScreen().run(self.hw)
+            selected = SplashScreen.HEART
 
     def home(self):
         return HomeScreen().run(self.hw)
@@ -1048,9 +1073,6 @@ class ClassicFrontEnd:
 
     def broadcast(self, report):
         BroadcastScreen(report).run(self.hw)
-
-    def donate(self):
-        DonateScreen().run(self.hw)
 
 
 def run(hw, session: flow.Session = None, splash: bool = True):

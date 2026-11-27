@@ -17,6 +17,9 @@ CLASSIC_TEXTS = {
     ("txid", "DO"): "In Sparrow, the transaction tab shows the Transaction ID. Compare all four rows with this "
                     "screen. Same: choose Same txid. Different: choose Different.",
     ("signer", "NEXT"): "Scan PSBT: the signed transaction, from Sparrow. Change seed wipes this seed to load another (multisig: a cosigner's).",
+    # v7.16: on the classic the host stays on the splash, and the donation is the heart
+    ("start", "LANGUAGE"): "Language and host are chosen here, before START. RAM only: at every power-on the device starts again in English, with Sparrow.",
+    ("start", "DONATE"): "The heart top left (joystick UP from Language): how to support the project, as QR codes. Nothing to do with the checks.",
     ("result", "GREEN"): "Every signature of this seed uses the nonce it had to use, sighash ALL, low S, and the txid "
                          "is Sparrow's. Choose Broadcast.",
 }

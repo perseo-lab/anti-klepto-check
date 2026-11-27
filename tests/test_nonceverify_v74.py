@@ -8,7 +8,7 @@ import time
 from nonceverify import app, ui
 from nonceverify.hw import HEIGHT, WIDTH, Event
 from nonceverify.wordentry import WordEntryScreen
-from test_nonceverify_ui import SPLASH_START, FakeHardware, Stop   # noqa: F401
+from test_nonceverify_ui import HOST_SPARROW, SPLASH_START, FakeHardware, Stop   # noqa: F401
 
 import pytest
 
@@ -31,7 +31,7 @@ def test_splash_waits_for_start_only(monkeypatch):
     emblem = ("tap", WIDTH // 2, app.SplashScreen.EMBLEM_CY)
     panel = ("tap", *center(app.SplashScreen.PANEL))
     corner = ("tap", 10, 310)
-    hw = FakeHardware([("shot", "s0"), emblem, panel, corner, ("shot", "s1"), SPLASH_START, ("shot", "home"),
+    hw = FakeHardware([("shot", "s0"), emblem, panel, corner, ("shot", "s1"), SPLASH_START, HOST_SPARROW, ("shot", "home"),
                        ("stop",)])
     with pytest.raises(Stop):
         app.run(hw)

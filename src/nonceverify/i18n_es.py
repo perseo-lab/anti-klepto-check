@@ -492,4 +492,16 @@ BY_ID = {
     "k484": "Silent Payments: cada pago llega a una nueva salida Taproot, nunca vinculable desde fuera. BOLT12: una oferta reutilizable, sin factura que pedir.",
     "k485": "Este dispositivo solo muestra códigos QR: escanéalos con tu teléfono. Nada sale del dispositivo.",
     "k486": "Escanear PSBT: la transacción firmada, desde Sparrow. Cambiar semilla borra esta semilla para cargar otra (multisig: la de un cofirmante).",
+    # v7.16: the host question, the donation on the splash, no explorer
+    "k487": "Donar",
+    "k488": "¿Con qué preparas la transacción?",
+    "k489": "El programa que crea la PSBT y luego la transmite. De él dependen las instrucciones y la forma de transmitir. Solo en RAM.",
+    "k490": "en el ordenador · Tx QR",
+    "k491": "en el teléfono",
+    "k492": "Comprobar: ¿la dirección que muestra Sparrow es realmente de este wallet? Se busca entre las direcciones del wallet, derivadas aquí de la semilla.",
+    "k493": "Escanear PSBT: la transacción firmada, desde Sparrow. Cambiar semilla borra esta semilla para cargar otra (multisig: la de un cofirmante). Dirección: comprueba una dirección de este wallet.",
+    "k494": "El idioma se elige aquí, el host justo después de START. Solo en RAM: en cada encendido el dispositivo vuelve a empezar en inglés y pregunta de nuevo el host.",
+    "k495": "Donar, arriba a la izquierda: cómo apoyar el proyecto, con códigos QR. No tiene que ver con las comprobaciones.",
+    "k496": "El corazón arriba a la izquierda (joystick hacia arriba desde Idioma): cómo apoyar el proyecto, con códigos QR. No tiene que ver con las comprobaciones.",
+    "k497": "DONAR",
 }

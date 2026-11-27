@@ -13,6 +13,11 @@ there is no Tx QR: the Broadcast screen shows the whole txid to find in Nunchuk,
 help page says plainly that the witnesses are as safe as Nunchuk is honest.
 """
 NUNCHUK = {
+    # v7.16: the power-on state names Sparrow as such, whatever host is chosen now
+    "Language and host are chosen here, before START. RAM only: at every power-on the device starts again in "
+    "English, with Sparrow.":
+        "Language and host are chosen here, before START. RAM only: at every power-on the device starts again in "
+        "English, with Sparrow.",
     # title of the broadcast help page: there is no Tx QR to broadcast
     "Broadcast THIS": "Broadcast from Nunchuk",
     # home page of the help

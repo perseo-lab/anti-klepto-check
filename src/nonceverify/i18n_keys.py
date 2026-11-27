@@ -495,4 +495,16 @@ KEYS = {
     "k484": "Silent Payments: every payment lands on a new Taproot output, never linkable from outside. BOLT12: a reusable offer, no invoice to ask for.",
     "k485": "This device only shows QR codes: scan them with your phone. Nothing leaves the device.",
     "k486": "Scan PSBT: the signed transaction, from Sparrow. Change seed wipes this seed to load another (multisig: a cosigner's).",
+    # v7.16: the host question, the donation on the splash, no explorer
+    "k487": "Donate",
+    "k488": "What do you prepare the transaction with?",
+    "k489": "The program that makes the PSBT and then broadcasts it. The instructions and the way to broadcast depend on it. RAM only.",
+    "k490": "on the computer · Tx QR",
+    "k491": "on the phone",
+    "k492": "Check: is the address Sparrow shows really this wallet's? It is searched among this wallet's addresses, derived here from the seed.",
+    "k493": "Scan PSBT: the signed transaction, from Sparrow. Change seed wipes this seed to load another (multisig: a cosigner's). Address: check an address of this wallet.",
+    "k494": "The language is chosen here, the host right after START. RAM only: at every power-on the device starts again in English and asks the host again.",
+    "k495": "Donate, top left: how to support the project, as QR codes. Nothing to do with the checks.",
+    "k496": "The heart top left (joystick UP from Language): how to support the project, as QR codes. Nothing to do with the checks.",
+    "k497": "DONATE",
 }

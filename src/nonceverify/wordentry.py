@@ -161,8 +161,10 @@ class WordEntryScreen(ui.Screen):
         def inside(rect, margin=1):
             return rect[0] - margin <= x <= rect[2] + margin and rect[1] - margin <= y <= rect[3] + margin
 
+        # v7.16: what is pressed lights up (ui.Screen.run); a dimmed letter does nothing and stays dark
         for slot, word in enumerate(self.candidates()):
             if inside(self.candidate_rect(slot), 2):
+                self.lit = ui.Button(self.candidate_rect(slot), Translated(word), size=17)
                 return ("word", word)
         allowed = next_letters(self.text)
         for chars in self.ROWS:
@@ -171,16 +173,20 @@ class WordEntryScreen(ui.Screen):
                     if c not in allowed:
                         return None             # dimmed: no BIP39 word goes that way
                     self.text += c
+                    self.lit = ui.Button(self.key_rect(c), c, size=21)
                     return "__redraw__"
         rects = self.control_rects()
         if inside(rects["erase"], 2):
             if self.text:
                 self.text = self.text[:-1]
+                self.lit = ui.Button(rects["erase"], "Delete", size=17, icon_name="erase")
                 return "__redraw__"
             return None
         if inside(rects["prev"], 2):
+            self.lit = ui.Button(rects["prev"], self.back_label, size=17, icon_name="back")
             return ("prev",)
         if inside(rects["cancel"], 2):
+            self.lit = ui.Button(rects["cancel"], "Cancel", size=17)
             return ("cancel",)
         return None
 

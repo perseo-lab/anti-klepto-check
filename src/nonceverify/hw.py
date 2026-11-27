@@ -172,6 +172,10 @@ class Hardware(Camera):
     def show(self, image):
         self.display.show_image(image.convert("RGB"))
 
+    def show_rows(self, image, y1: int, y2: int):
+        """ v7.16: only rows y1..y2 (a lit key going dark again), through the driver's banded writes """
+        self.display.show_rows(image.convert("RGB"), y1, y2)
+
     # Touch --------------------------------------------------------------------------
     def poll(self) -> list:
         """ Taps and swipes since the last call (non-blocking) """

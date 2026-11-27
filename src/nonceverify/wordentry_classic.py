@@ -7,6 +7,8 @@ words are reviewed at the end with the checksum, hidden until Show.
 
 The letters are in alphabetical order: with a joystick, a known order is faster to reach
 than QWERTY. KEY2 deletes a letter, KEY3 goes back (to the previous word, or the review).
+v7.16: only the letters that can still lead to a word are on the screen, re-flowed and
+larger when they are few: the joystick never walks over a letter that can't be typed.
 """
 from nonceverify import seedqr, ui_classic as u
 from nonceverify.hw import Event
@@ -32,10 +34,10 @@ class WordEntryScreen(u.Screen):
     """ Typing word `index` (0-based) of `count`. Returns ("word", w) or ("prev",) """
     step = 0
     help_topic = "seed"
-    ROWS = ("abcdefg", "hijklmn", "opqrstu", "vwxyz")
-    COLS = 7
+    ALPHABET = "abcdefghijklmnopqrstuvwxyz"
     KEYS_TOP = 76
-    KEY_H = 24
+    KEYS_BOTTOM = 183                  # above the candidate words (CAND_TOP)
+    KEY_H_MAX = 36
     KEY_GAP = 3
     CAND_TOP = 186
     CAND_SLOTS = 4
@@ -52,15 +54,41 @@ class WordEntryScreen(u.Screen):
         self.cursor = None
         self.layout()
 
-    @classmethod
-    def key_rect(cls, letter: str):
-        width = (u.RIGHT - u.PAD - (cls.COLS - 1) * cls.KEY_GAP) / cls.COLS
-        for row, chars in enumerate(cls.ROWS):
-            if letter in chars:
-                col = chars.index(letter)
-                x = u.PAD + col * (width + cls.KEY_GAP)
-                y = cls.KEYS_TOP + row * (cls.KEY_H + cls.KEY_GAP)
-                return (int(x), int(y), int(x + width), int(y + cls.KEY_H))
+    def letters(self) -> str:
+        """ v7.16: only the letters that can still lead to a BIP39 word, in alphabetical order """
+        allowed = next_letters(self.text)
+        return "".join(c for c in self.ALPHABET if c in allowed)
+
+    def letter_rows(self) -> list:
+        """
+        The letters in rows: 7 per row when more than 12 (all 25 at the start: four rows,
+        as before), else 6 per row (up to 12: two rows), at least 4 columns (a lone letter
+        stays a key, not a bar). Returns [[(letter, rect), ...], ...]; the keys get taller
+        as the rows get fewer.
+        """
+        letters = self.letters()
+        n = len(letters)
+        if not n:
+            return []
+        cols = 7 if n > 12 else max(4, min(6, n))
+        rows = (n + cols - 1) // cols
+        height = min(self.KEY_H_MAX, int((self.KEYS_BOTTOM - self.KEYS_TOP - (rows - 1) * self.KEY_GAP) / rows))
+        width = (u.RIGHT - u.PAD - (cols - 1) * self.KEY_GAP) / cols
+        out = []
+        for r in range(rows):
+            row = []
+            for c, letter in enumerate(letters[r * cols:(r + 1) * cols]):
+                x = u.PAD + c * (width + self.KEY_GAP)
+                y = self.KEYS_TOP + r * (height + self.KEY_GAP)
+                row.append((letter, (int(x), int(y), int(x + width), int(y + height))))
+            out.append(row)
+        return out
+
+    def key_rect(self, letter: str):
+        for row in self.letter_rows():
+            for c, rect in row:
+                if c == letter:
+                    return rect
         raise KeyError(letter)
 
     @classmethod
@@ -75,29 +103,33 @@ class WordEntryScreen(u.Screen):
         found = matches(self.text)
         return found if self.text and len(found) <= self.CAND_SLOTS else []
 
-    def layout(self):
-        """ The grid: the letter rows, then the candidate words (two per row) """
-        rows = [[self.key_rect(c) for c in chars] for chars in self.ROWS]
+    def layout(self, keep: bool = False):
+        """
+        The grid: the letter rows, then the candidate words (two per row). The letters
+        change with every letter typed (v7.16): the cursor goes back to the first one, or
+        to the word when one is left. `keep`: same text, the cursor stays (a redraw).
+        """
+        letter_rows = self.letter_rows()
         cands = self.candidates()
+        rows = [[rect for _c, rect in row] for row in letter_rows]
         rows.append([self.candidate_rect(i) for i in range(min(2, len(cands)))])
         rows.append([self.candidate_rect(i) for i in range(2, len(cands))])
+        rows = [r for r in rows if r]                       # as ui_classic.Grid keeps them
         old = self.cursor
         self.grid = u.Grid(rows)
         self.cells = {}
-        for r, chars in enumerate(self.ROWS):
-            for c, letter in enumerate(chars):
+        for r, row in enumerate(letter_rows):
+            for c, (letter, _rect) in enumerate(row):
                 self.cells[(r, c)] = ("letter", letter)
         for slot, word in enumerate(cands):
-            r = len(self.ROWS) + slot // 2
+            r = len(letter_rows) + slot // 2
             self.cells[(r, slot % 2)] = ("word", word)
         if len(cands) == 1:
-            self.grid.cursor = (len(self.ROWS), 0)          # one word left: it is selected
-        elif old is not None and old in self.cells and old[0] < len(self.ROWS):
+            self.grid.cursor = (len(letter_rows), 0)        # one word left: it is selected
+        elif keep and old in self.cells:
             self.grid.cursor = old
         else:
-            allowed = next_letters(self.text)
-            first = next((rc for rc, (kind, v) in self.cells.items() if kind == "letter" and v in allowed), (0, 0))
-            self.grid.cursor = first if old is None or old not in self.cells else old
+            self.grid.cursor = (0, 0)
         self.cursor = self.grid.cursor
 
     def draw(self, d, image):
@@ -110,14 +142,14 @@ class WordEntryScreen(u.Screen):
         if self.text and len(found) > self.CAND_SLOTS:
             d.text((self.FIELD[2] - 5, cy), f"{len(found)} words", fill=u.DIM, font=u.font(u.SMALL),
                    anchor="rm")
-        allowed = next_letters(self.text)
-        for (r, c), (kind, value) in self.cells.items():
-            if kind != "letter":
-                continue
-            u.key_cell(d, self.key_rect(value), value, (r, c) == self.cursor, value in allowed, size=18)
+        for r, row in enumerate(self.letter_rows()):
+            for c, (letter, rect) in enumerate(row):
+                size = 18 if rect[3] - rect[1] < 30 else 22
+                u.key_cell(d, rect, letter, (r, c) == self.cursor, True, size=size)
         cands = self.candidates()
+        letter_rows = len(self.letter_rows())
         for slot, word in enumerate(cands):
-            r = len(self.ROWS) + slot // 2
+            r = letter_rows + slot // 2
             u.Item(self.candidate_rect(slot), Translated(word), primary=len(cands) == 1, size=u.BODY).draw(
                 d, selected=(r, slot % 2) == self.cursor)
         if not self.text:
@@ -170,7 +202,7 @@ class WordEntryScreen(u.Screen):
                 self.text += value
                 self.layout()
                 return "__redraw__"
-            return None                          # a dimmed letter: no BIP39 word goes that way
+            return None
         return super().on_event(event)
 
 

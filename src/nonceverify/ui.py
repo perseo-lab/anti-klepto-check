@@ -354,11 +354,40 @@ def housekeeping(hw=None):
             pass                       # never breaks a screen
 
 
+# v7.16: a key of the keyboards lights up when pressed (teal, as a primary button, with a
+# dark ring) for LIT_S, then only its rows are sent again to the panel
+LIT_S = 0.15
+LIT_RING = 3
+
+
+def draw_lit(d, button: "Button"):
+    """ `button` as it looks while pressed """
+    x1, y1, x2, y2 = button.rect
+    r = LIT_RING
+    d.rounded_rectangle((x1 - r, y1 - r, x2 + r, y2 + r), radius=5 + r, outline=ACCENT_DARK, width=r)
+    Button(button.rect, button.label, size=button.size, icon_name=button.icon_name, primary=True).draw(d)
+
+
+def lit_rows(button: "Button"):
+    """ The panel rows the lit key covers, ring included """
+    return max(0, button.rect[1] - LIT_RING), min(HEIGHT - 1, button.rect[3] + LIT_RING)
+
+
+def show_rows(hw, image, y1: int, y2: int):
+    """ Only rows y1..y2 of a full-screen image when the hardware can (ILI9486 show_rows), else all of it """
+    rows = getattr(hw, "show_rows", None)
+    if rows is None:
+        hw.show(image)
+    else:
+        rows(image, y1, y2)
+
+
 class Screen:
     """ Base: draw once, then wait for a tap on one of `self.buttons` """
     step = None                       # header step (0 SEED, 1 PSBT, 2 ESITO) or None
     header_label = None
     help_topic = None                 # v7.9: a nonceverify.guide topic: "?" in the header
+    lit = None                        # v7.16: set by on_event to the Button just pressed (keyboards)
 
     def __init__(self):
         self.buttons = []
@@ -383,22 +412,47 @@ class Screen:
         return None
 
     def run(self, hw, timeout: float = None):
-        hw.show(self.render())
+        shown = self.render()
+        hw.show(shown)
         started = time.monotonic()
         tick = getattr(hw, "battery_tick", None)
+        unlit = None                       # v7.16: (deadline, rows) of a lit key to switch off
         while True:
             housekeeping(hw)
+            if unlit is not None and time.monotonic() >= unlit[0]:
+                show_rows(hw, shown, *unlit[1])
+                unlit = None
             if tick is not None and tick():
-                hw.show(self.render())
+                shown = self.render()
+                hw.show(shown)
+                unlit = None
             for event in hw.poll():
                 if self.help_topic and in_help_rect(event):
                     open_help(hw, self.help_topic)          # v7.9: then the same screen again
-                    hw.show(self.render())
+                    shown = self.render()
+                    hw.show(shown)
+                    unlit = None
                     continue
+                self.lit = None
                 result = self.on_event(event)
+                lit, self.lit = self.lit, None
                 if result == "__redraw__":
-                    hw.show(self.render())
+                    shown = self.render()
+                    if lit is None:
+                        hw.show(shown)
+                        unlit = None
+                    else:
+                        # the new state with the key lit, in one frame; then only its rows go dark again
+                        image = shown.copy()
+                        draw_lit(draw_on(image), lit)
+                        hw.show(image)
+                        unlit = (time.monotonic() + getattr(hw, "lit_s", LIT_S), lit_rows(lit))
                 elif result is not None:
+                    if lit is not None:
+                        # leaving: the key lit until the next screen is drawn
+                        image = shown.copy()
+                        draw_lit(draw_on(image), lit)
+                        show_rows(hw, image, *lit_rows(lit))
                     return result
             if timeout is not None and time.monotonic() - started > timeout:
                 return None
@@ -507,68 +561,19 @@ class KeyboardScreen(Screen):
         for b in self.keys():
             if b.contains(event.x, event.y, margin=1):
                 kind, arg = b.value
+                self.lit = b                   # v7.16: the key lights up
                 if kind == "char":
                     self.text += arg
                     if self.page == "ABC":
                         self.page = "abc"
                 elif kind == "page":
                     self.page = arg
+                    # the key that changed the page lights up with its new label
+                    self.lit = next((k for k in self.keys() if k.rect == b.rect), b)
                 elif kind == "back":
                     self.text = self.text[:-1]
                 elif kind == "done":
                     return ("done", self.text)
-                return "__redraw__"
-        return None
-
-
-class NumberPadScreen(Screen):
-    """ v7.5: digits only (the explorer's "Go to #" opened the passphrase keyboard) """
-    KEYS_TOP = TOP + 64
-    KEY_H = 60
-    MAX_DIGITS = 10
-
-    def __init__(self, title_text: str, text: str = ""):
-        super().__init__()
-        self.title_text, self.text = title_text, text
-
-    def keys(self):
-        out = []
-        width = (WIDTH - 6 * PAD) / 5
-        for n, digit in enumerate("1234567890"):
-            col, row = n % 5, n // 5
-            x = PAD + col * (width + PAD)
-            y = self.KEYS_TOP + row * (self.KEY_H + 8)
-            out.append(Button((x, y, x + width, y + self.KEY_H), digit, value=("digit", digit), size=26))
-        out.append(Button((WIDTH - PAD - 90, TOP + 8, WIDTH - PAD, TOP + 50), "", value=("erase", None),
-                          icon_name="erase"))
-        out += bottom_row(["Cancel", "Go"], primary_index=1, values=[("cancel", None), ("done", None)])
-        return out
-
-    def render(self):
-        self.buttons = self.keys()
-        image, d = new_canvas()
-        header(d, None, "EXPLORER")
-        d.text((PAD, TOP + 2), self.title_text, fill=DIM, font=font(14, bold=True), anchor="lt")
-        d.rounded_rectangle((PAD, TOP + 20, WIDTH - PAD - 100, TOP + 50), radius=5, fill=PANEL, outline=ACCENT)
-        d.text((2 * PAD, TOP + 35), (self.text or "") + "_", fill=TEXT, font=font(22, bold=True, mono=True),
-               anchor="lm")
-        for b in self.buttons:
-            b.draw(d)
-        return image
-
-    def on_event(self, event):
-        if event.kind != Event.TAP:
-            return None
-        for b in self.keys():
-            if b.contains(event.x, event.y, margin=1):
-                kind, arg = b.value
-                if kind == "digit":
-                    if len(self.text) < self.MAX_DIGITS:
-                        self.text += arg
-                elif kind == "erase":
-                    self.text = self.text[:-1]
-                else:
-                    return (kind, self.text)
                 return "__redraw__"
         return None
 

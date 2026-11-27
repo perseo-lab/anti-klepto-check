@@ -200,8 +200,8 @@ def test_two_seeds_in_one_power_on_make_the_multisig_green():
     parts = ur_parts(psbt.serialize())
     script_ = load_seed_script(shots=False) + SEEDSIGNER + [RIGHT, ("blank",)] + parts
     script_ += [SAME_TXID, ("shot", "95_this_seed_clean"), DETAILS, FINISH, WIPE]   # v7.9: Details, Finish, Wipe
-    from test_nonceverify_ui import DONATE_DONE, TYPE_SEED, WORDS_12, type_word
-    script_ += [FULL, DONATE_DONE, TYPE_SEED, WORDS_12]                                 # v7.14: the donation
+    from test_nonceverify_ui import TYPE_SEED, WORDS_12, type_word
+    script_ += [FULL, TYPE_SEED, WORDS_12]                                              # v7.16: no donation
     for w in SEED_B.split():
         script_ += type_word(w)
     script_ += [RIGHT, LEFT] + SEEDSIGNER + [RIGHT, ("blank",)] + parts                    # Confirm, None
@@ -352,7 +352,7 @@ def test_chaincode_copy_is_caught_by_every_pick():
 def test_tampered_descriptor_is_refused_when_a_group_differs():
     data = forged("checksum")
     session = app.Session()
-    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 240, 194), ("blank",), ("qr", data["tampered"])]
+    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 357, 194), ("blank",), ("qr", data["tampered"])]
     script_ += [RIGHT, ("shot", "97_key_check_tampered"), LEFT, ("shot", "98_not_your_backup"), FULL, ("stop",)]
     hw = FakeHardware(script_)
     with pytest.raises(Stop):
@@ -378,7 +378,7 @@ def test_extra_key_with_threshold_one_is_refused_at_the_threshold():
     assert [b.label for b in screen.buttons] == ["No", "Yes, 1 of 4"]
     session = app.Session()
     # the attacker key and the two cosigners "match" (the user taps Same), the threshold doesn't
-    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 240, 194), ("blank",), ("qr", evil)]
+    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 357, 194), ("blank",), ("qr", evil)]
     script_ += [RIGHT, RIGHT, RIGHT, RIGHT, ("shot", "99_threshold_1_of_4"), LEFT, FULL, ("stop",)]
     hw = FakeHardware(script_)
     with pytest.raises(Stop):
@@ -389,7 +389,7 @@ def test_extra_key_with_threshold_one_is_refused_at_the_threshold():
 def test_genuine_descriptor_goes_through_the_key_checks():
     text, _ = multisig_descriptor()
     session = app.Session()
-    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 240, 194), ("blank",), ("qr", text)]
+    script_ = load_seed_script(shots=False) + [MIDDLE, ("tap", 357, 194), ("blank",), ("qr", text)]
     script_ += DESCRIPTOR_CONFIRM + [("shot", "99b_scan_address"), ("stop",)]
     hw = FakeHardware(script_)
     with pytest.raises(Stop):
@@ -411,10 +411,11 @@ def test_qr_self_check_is_case_exact(monkeypatch):
     import qrcode
     monkeypatch.setattr(app, "decode_qr", _zbar)
     text, _ = A.SinglesigExplorer(master(), 44, 0).address(False, 0)
-    assert app.address_qr(text, 222) is not None
+    # v7.16: the explorer (address_qr) is gone; the same check guards every QR shown (checked_qr)
+    assert app.checked_qr(text, 222) is not None
     real_add = qrcode.QRCode.add_data
     monkeypatch.setattr(qrcode.QRCode, "add_data", lambda self, data, *a, **k: real_add(self, data.swapcase(), *a, **k))
-    assert app.address_qr(text, 222) is None, "a QR of another string is never shown"
+    assert app.checked_qr(text, 222) is None, "a QR of another string is never shown"
 
 
 def test_reversed_multipath_is_refused():
@@ -501,14 +502,6 @@ def test_seedqr_preview_is_the_plain_camera_image():
     image = screen.compose(q)
     crop = image.crop((screen.LEFT, 0, screen.LEFT + 320, 320))
     assert _zbar(crop) is not None, "the QR on screen is the QR in front of the camera"
-
-
-def test_numpad_returns_digits_only():
-    pad = ui.NumberPadScreen("Go to address #")
-    for ch in "102":
-        b = next(b for b in pad.keys() if b.value == ("digit", ch))
-        pad.on_event(Event(Event.TAP, (b.rect[0] + b.rect[2]) / 2, (b.rect[1] + b.rect[3]) / 2))
-    assert pad.on_event(Event(Event.TAP, 357, 288)) == ("done", "102")
 
 
 # ---------------------------------------------------------------------------------------

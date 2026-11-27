@@ -460,26 +460,14 @@ def pick_groups(xpub_text: str, rng=None, count: int = KEY_CHECK_GROUPS) -> list
 
 
 # ---------------------------------------------------------------------------------------
-# v7.3: address explorer
-# ---------------------------------------------------------------------------------------
-EXPLORER_PAGE = 4                     # v7.5: 40-pixel rows (were 6 of 26)
-EXPLORER_MAX_INDEX = 0x7FFFFFFF - EXPLORER_PAGE
-EXPLORER_MAX_ACCOUNT = 99
-
-
-def indexed(explorer) -> bool:
-    """ Addresses numbered by an index (a descriptor without /* has a single address) """
-    return getattr(explorer, "wildcard", lambda: True)()
-
-
-# ---------------------------------------------------------------------------------------
 # v7.12: the steps of a session, for any front end
 # ---------------------------------------------------------------------------------------
 # The order of the steps is part of the check (no result before the txid, the signer fixed
 # at the first scan, red kept): it is written here once. A front end draws each step in
 # its own way and returns what the user chose. What it must offer (duck typing):
 #
-#   splash()                                  until the user starts
+#   splash()                                  until the user starts (and has chosen language and host:
+#                                             on the splash or right after it, as the hardware allows)
 #   home() -> "scan_seed" | "type_seed"       how to load the seed
 #   scan(heading, on_payload, topic, errors=()) -> True | None (back)
 #       on_payload(bytes) -> (done, progress 0-1, note), may raise one of `errors`
@@ -496,7 +484,6 @@ def indexed(explorer) -> bool:
 #   result(report, signer, txid_confirmed, details) -> one of the ACTION__ values
 #   broadcast(report)
 #   address(session)                          optional: the address checks (v7)
-#   donate()                                  optional: the invitation to donate, after the wipe (v7.14)
 #   error(exception)                          an unexpected error, the seed kept
 TONE__ACCENT = "accent"
 SWITCH_OFF__UPS_HAT = "Switch off with the UPS HAT switch: that clears the RAM completely."
@@ -689,6 +676,4 @@ def run(fe, session: Session = None, splash: bool = True, log=None):
             # how the power goes off depends on the hardware: the front end says it
             fe.message("Seed wiped", "Seed and passphrase have been removed from the app's memory.\n\n"
                        + getattr(fe, "SWITCH_OFF", SWITCH_OFF__UPS_HAT), TONE__ACCENT, "lock", buttons=("Start again",))
-            # v7.14: at the end of a session, the invitation to donate (signed details, QR only)
-            if hasattr(fe, "donate"):
-                fe.donate()
+            # v7.16: no donation here any more: it is on the splash, for whoever wants it
